@@ -52,7 +52,8 @@ def parse_text(text: str,
         warnings.append(Note('warn.only_scrap'))
 
     return ProgramNest(
-        number=number if number is not None else -1,
+        position=0,          # проставляется при сборе задания
+        number=number,
         name=name,
         path=path,
         sheet_count=sheet_count,
@@ -70,8 +71,6 @@ def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest
     number = reader.program_number(path, syntax)
 
     nest = parse_text(text, name=name, path=path, number=number, syntax=syntax)
-    if number is None:
-        nest.warnings.append(Note('warn.no_number'))
     if encoding not in ('utf-8', 'utf-8-sig'):
         nest.warnings.append(Note('warn.encoding', {'encoding': encoding}))
     return nest
@@ -79,7 +78,12 @@ def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest
 
 def collect_programs(directory: str,
                      syntax: MachineSyntax = DEFAULT_SYNTAX) -> List[ProgramNest]:
-    """Разобрать все программы в папке, по возрастанию номера."""
+    """Разобрать все программы в папке, в порядке выполнения.
+
+    Порядок задаёт естественная сортировка имени файла, после чего программам
+    раздаются места в задании: 1, 2, 3 и так далее. Дальше вся утилита
+    оперирует местами, а не числами из имён.
+    """
     nests = []
     for entry in sorted(os.listdir(directory)):
         path = os.path.join(directory, entry)
@@ -88,5 +92,8 @@ def collect_programs(directory: str,
         if os.path.splitext(entry)[1].lower() not in syntax.nc_suffixes:
             continue
         nests.append(parse_file(path, syntax))
-    nests.sort(key=lambda n: (n.number, n.name))
+
+    nests.sort(key=lambda n: reader.natural_key(n.path or n.name))
+    for place, nest in enumerate(nests, start=1):
+        nest.position = place
     return nests

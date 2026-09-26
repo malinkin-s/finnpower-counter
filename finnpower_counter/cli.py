@@ -85,6 +85,14 @@ def _as_json(summary: ShiftSummary,
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
 
 
+def _done_label(summary, done: Optional[int]) -> str:
+    """Что показать в строке «выполнено программ»."""
+    if done is None:
+        return i18n.t('programs.not_started')
+    nest = summary.by_position(done)
+    return '{} ({})'.format(done, nest.name) if nest else str(done)
+
+
 def _preferred_language(argv: Optional[List[str]]) -> str:
     """Язык из --lang, иначе из системы."""
     items = list(sys.argv[1:] if argv is None else argv)
@@ -102,7 +110,7 @@ def build_parser():
         description=i18n.t('cli.description'))
     parser.add_argument('-d', '--dir', required=True, metavar='DIR',
                         help=i18n.t('cli.help.dir'))
-    parser.add_argument('-n', '--done', type=int, metavar='N',
+    parser.add_argument('-n', '--done', metavar='N',
                         help=i18n.t('cli.help.done'))
     parser.add_argument('-s', '--search', metavar='TEXT',
                         help=i18n.t('cli.help.search'))
@@ -142,11 +150,17 @@ def main(argv: Optional[List[str]] = None,
             _write(err, '  {}'.format(warning))
         return EXIT_ERROR
 
-    statuses = balance.status_at(summary, args.done)
+    try:
+        done = balance.resolve_position(summary, args.done or '')
+    except ValueError as exc:
+        _write(err, i18n.t('cli.error', message=exc.args[0]))
+        return EXIT_ERROR
+
+    statuses = balance.status_at(summary, done)
     by_programs = args.mode == presentation.MODE_PROGRAMS
     if by_programs:
         programs = presentation.filter_programs(
-            summary.usable_programs, args.only, args.search, args.done)
+            summary.usable_programs, args.only, args.search, done)
         shown = presentation.filter_statuses(statuses, args.only, args.search)
     else:
         programs = []
@@ -160,12 +174,11 @@ def main(argv: Optional[List[str]] = None,
         _write(out, presentation.counters(summary, statuses))
         _write(out, i18n.t(
             'programs.done',
-            value=args.done if args.done is not None
-            else i18n.t('programs.not_started')))
+            value=_done_label(summary, done)))
         _write(out, '')
         if by_programs:
             head = presentation.columns(presentation.MODE_PROGRAMS)
-            body = presentation.program_rows(programs, args.done)
+            body = presentation.program_rows(programs, done)
         else:
             head = presentation.columns(presentation.MODE_PARTS)
             body = presentation.rows(shown)

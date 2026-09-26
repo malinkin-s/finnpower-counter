@@ -455,25 +455,14 @@ class CounterApp(object):
         self._recalculate()
         self.entry_done.focus_set()
 
-    def _done_number(self) -> Optional[int]:
-        text = self.var_done.get().strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            messagebox.showwarning(i18n.t('app.title'), i18n.t('dlg.not_a_number'))
-            return None
-
     def _recalculate(self) -> None:
         if self.summary is None:
             return
-        done = self._done_number()
-        if done is not None and self.summary.program_numbers:
-            last = max(self.summary.program_numbers)
-            if done > last:
-                messagebox.showinfo(i18n.t('app.title'),
-                                    i18n.t('dlg.beyond_shift', last=last))
+        try:
+            done = balance.resolve_position(self.summary, self.var_done.get())
+        except ValueError as exc:
+            messagebox.showwarning(i18n.t('app.title'), str(exc.args[0]))
+            return
         self.statuses = balance.status_at(self.summary, done)
         self._refresh_table()
 
@@ -488,7 +477,7 @@ class CounterApp(object):
                 self.summary.usable_programs, self.var_only.get(),
                 self.var_search.get(), done)
             for nest in shown:
-                executed = done is not None and nest.number <= done
+                executed = done is not None and nest.position <= done
                 self.tree.insert('', 'end', iid=ROW_PROGRAM + nest.name,
                                  values=presentation.program_row(nest, done),
                                  tags=('done',) if executed else ())
@@ -510,14 +499,15 @@ class CounterApp(object):
         self.var_counters.set(presentation.counters(self.summary, self.statuses))
 
     def _current_done(self) -> Optional[int]:
-        """Номер выполненной программы без жалоб на ввод.
+        """Место выполненной программы без жалоб на ввод.
 
         Таблица перерисовывается на каждое нажатие в поиске, и ругаться
-        на недописанное число в такие моменты нельзя.
+        на недописанное имя в такие моменты нельзя.
         """
-        text = self.var_done.get().strip()
+        if self.summary is None:
+            return None
         try:
-            return int(text) if text else None
+            return balance.resolve_position(self.summary, self.var_done.get())
         except ValueError:
             return None
 

@@ -180,12 +180,15 @@ def test_режим_деталей_по_умолчанию(shift_dir):
 
 
 def test_отбор_программ_в_консоли(shift_dir):
+    def rows(text):
+        return [l for l in text.splitlines() if l.startswith('PRG_')]
     _, done, _ = run(['--dir', shift_dir, '-n', '5', '-m', 'programs', '--only', 'done'])
     _, work, _ = run(['--dir', shift_dir, '-n', '5', '-m', 'programs', '--only', 'work'])
-    assert done.count('PRG_') == 5
-    assert work.count('PRG_') == 7
+    assert len(rows(done)) == 5
+    assert len(rows(work)) == 7
 
 
 def test_поиск_программы_в_консоли(shift_dir):
     _, out, _ = run(['--dir', shift_dir, '-m', 'programs', '-s', '7'])
-    assert out.count('PRG_') == 1 and 'PRG_07' in out
+    rows = [l for l in out.splitlines() if l.startswith('PRG_')]
+    assert len(rows) == 1 and rows[0].startswith('PRG_07')

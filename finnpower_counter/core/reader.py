@@ -12,7 +12,8 @@
 """
 
 import os
-from typing import List, Optional, Tuple
+import re
+from typing import Any, List, Optional, Tuple
 
 from .. import i18n
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
@@ -100,11 +101,32 @@ def find_sibling(path: str, suffixes: Tuple[str, ...]) -> Optional[str]:
     return None
 
 
-def program_number(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Optional[int]:
-    """Номер программы из имени файла.
+_DIGITS = re.compile(r'(\d+)')
 
-    Берётся именно номер: сортировка имён по алфавиту ставит PRG_10 перед
-    PRG_9, и крайняя программа для детали определяется неверно.
+
+def natural_key(path: str) -> Tuple[Any, ...]:
+    """Ключ естественной сортировки имени файла.
+
+    Порядок выполнения программ определяется именно так, а не по числу,
+    выдернутому из имени. Причина в том, что одно число обе задачи не решает:
+
+    * при сортировке по алфавиту PRG_10 встаёт перед PRG_9;
+    * если брать последнюю группу цифр, то на именах вида ДДММГГ + код +
+      номер (000101zz201001) последовательность получается ни возрастающей,
+      ни уникальной: программы разных дат дают одинаковый хвост.
+
+    Разбиение на числовые и текстовые куски с числовым сравнением чисел
+    разбирает все три случая: с ведущими нулями, без них и с датой в имени.
+    """
+    stem = os.path.splitext(os.path.basename(path))[0]
+    return tuple(int(part) if part.isdigit() else part.lower()
+                 for part in _DIGITS.split(stem))
+
+
+def program_number(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Optional[int]:
+    """Число из имени файла, если оно там есть.
+
+    Справочное значение. Для порядка выполнения не годится — см. natural_key.
     """
     stem = os.path.splitext(os.path.basename(path))[0]
     match = syntax.program_number.search(stem)

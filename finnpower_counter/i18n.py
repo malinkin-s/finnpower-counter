@@ -54,7 +54,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'counters': ('Programs: {programs}    Parts: {parts}    Pieces: {pieces}    '
                      'Fully done: {done} of {total}'),
         'counters.empty': 'No shift folder selected',
-        'done.count': 'Fully done: {done} of {total}',
         'programs.done': 'Programs completed: {value}',
         'programs.not_started': 'shift not started',
 
@@ -76,7 +75,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'warn.zero_sheets': 'SHEET_COUNT=0 — program yields no parts',
         'warn.block_skipped': 'PART_DATA block #{index} skipped: no {field}',
         'warn.only_scrap': 'only scrap contours in this program, no parts',
-        'warn.no_number': 'file name contains no program number',
         'warn.encoding': 'file was read as {encoding}',
         'warn.no_programs': 'no program files in folder ({suffixes})',
         'warn.fms_no_sheets': 'report has no NUMBER OF SHEETS',
@@ -112,6 +110,11 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'detail.close': 'Close',
 
         # --- карта наладки ---
+        'done.ambiguous': ('"{text}" matches several programs: {names}.\n\n'
+                           'Type the place in the shift or a longer part of the name.'),
+        'done.unknown': ('No program matches "{text}".\n\n'
+                         'Type its place in the shift or its name.'),
+
         'doc.missing': 'No setup report found next to program {program}.',
         'doc.failed': 'Could not open the setup report.\n\n{error}',
 
@@ -120,10 +123,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'dlg.read_failed': 'Could not read the folder.\n\n{error}',
         'dlg.no_programs': 'No usable programs in this folder.\n\n{details}',
         'dlg.no_programs_plain': 'No NC program files found.',
-        'dlg.not_a_number': ('The completed program number must be a number.\n\n'
-                             'Leave the field empty if the shift has not started.'),
-        'dlg.beyond_shift': ('The task has {last} programs. Showing the shift '
-                             'as fully completed.'),
         'dlg.warnings': 'Notes from parsing:\n\n{items}',
         'dlg.nothing_to_export': 'Nothing to export: the list is empty.',
         'dlg.save_as': 'Save export',
@@ -186,7 +185,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'counters': ('Программ: {programs}    Позиций: {parts}    Деталей: {pieces}    '
                      'Готово полностью: {done} из {total}'),
         'counters.empty': 'Папка со сменным заданием не выбрана',
-        'done.count': 'Готово полностью: {done} из {total}',
         'programs.done': 'Выполнено программ: {value}',
         'programs.not_started': 'смена не начата',
 
@@ -205,7 +203,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'warn.zero_sheets': 'SHEET_COUNT=0 — программа не даёт деталей',
         'warn.block_skipped': 'блок PART_DATA №{index} пропущен: нет {field}',
         'warn.only_scrap': 'в программе только служебные контуры, деталей нет',
-        'warn.no_number': 'в имени файла нет номера программы',
         'warn.encoding': 'файл прочитан как {encoding}',
         'warn.no_programs': 'в папке нет файлов программ ({suffixes})',
         'warn.fms_no_sheets': 'в отчёте нет NUMBER OF SHEETS',
@@ -238,6 +235,11 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'detail.summary': 'Всего {total} шт в {count} программах, закрывается на {last}',
         'detail.close': 'Закрыть',
 
+        'done.ambiguous': ('Под «{text}» подходит несколько программ: {names}.\n\n'
+                           'Введите место в задании или более длинную часть имени.'),
+        'done.unknown': ('Под «{text}» не нашлось ни одной программы.\n\n'
+                         'Введите её место в задании или имя.'),
+
         'doc.missing': 'Рядом с программой {program} карты наладки нет.',
         'doc.failed': 'Не удалось открыть карту наладки.\n\n{error}',
 
@@ -245,10 +247,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'dlg.read_failed': 'Не удалось прочитать папку.\n\n{error}',
         'dlg.no_programs': 'В папке нет пригодных программ.\n\n{details}',
         'dlg.no_programs_plain': 'Файлы управляющих программ не найдены.',
-        'dlg.not_a_number': ('Номер выполненной программы вводится числом.\n\n'
-                             'Пустое поле — смена ещё не начата.'),
-        'dlg.beyond_shift': ('В задании {last} программ. Показано как полностью '
-                             'отработанная смена.'),
         'dlg.warnings': 'Замечания при разборе файлов:\n\n{items}',
         'dlg.nothing_to_export': 'Выгружать нечего: список пуст.',
         'dlg.save_as': 'Сохранить выгрузку',

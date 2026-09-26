@@ -12,7 +12,8 @@ from finnpower_counter.core.model import PartStatus
 
 
 def status(part, total, last, produced):
-    return PartStatus(part=part, total=total, last_program=last, produced=produced)
+    return PartStatus(part=part, total=total, last_position=last,
+                      last_program='PRG_{:02d}'.format(last), produced=produced)
 
 
 SAMPLE = [
@@ -23,8 +24,8 @@ SAMPLE = [
 
 
 def test_строка_таблицы():
-    assert presentation.row(SAMPLE[0]) == ['PART_NO01', '6', '7', '6 / 6', 'Готово']
-    assert presentation.row(SAMPLE[1]) == ['PART_NO02', '14', '12', '12 / 14', 'В работе']
+    assert presentation.row(SAMPLE[0]) == ['PART_NO01', '6', 'PRG_07', '6 / 6', 'Готово']
+    assert presentation.row(SAMPLE[1]) == ['PART_NO02', '14', 'PRG_12', '12 / 14', 'В работе']
 
 
 def test_число_колонок_совпадает_с_числом_полей():

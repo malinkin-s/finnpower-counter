@@ -14,7 +14,7 @@ from finnpower_counter.core import balance, fms_parser, nc_parser
 def test_габариты_разбираются(fixtures_dir, expected):
     summary = balance.load_shift(os.path.join(fixtures_dir, 'shift_ok'))
     for nest in summary.programs:
-        want = expected['sheet_sizes'][str(nest.number)]
+        want = expected['sheet_sizes'][str(nest.position)]
         assert [nest.sheet_x, nest.sheet_y] == want, nest.name
 
 
@@ -73,7 +73,7 @@ def test_выравнивание_есть_для_каждой_колонки():
 
 
 def test_строка_программы(shift_ok):
-    nest = next(n for n in shift_ok.programs if n.number == 6)
+    nest = next(n for n in shift_ok.programs if n.position == 6)
     row = presentation.program_row(nest, done=12)
     assert row[0] == 'PRG_06'
     assert row[1] == '3000 x 1500'

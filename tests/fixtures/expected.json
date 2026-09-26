@@ -1,72 +1,86 @@
 {
   "parts": [
     {
-      "last_program": 7,
+      "last_position": 7,
+      "last_program": "PRG_07",
       "part": "PART_NO01",
       "total": 6
     },
     {
-      "last_program": 12,
+      "last_position": 12,
+      "last_program": "PRG_12",
       "part": "PART_NO02",
       "total": 14
     },
     {
-      "last_program": 9,
+      "last_position": 9,
+      "last_program": "PRG_09",
       "part": "PART_NO03",
       "total": 4
     },
     {
-      "last_program": 12,
+      "last_position": 12,
+      "last_program": "PRG_12",
       "part": "PART_NO04",
       "total": 7
     },
     {
-      "last_program": 12,
+      "last_position": 12,
+      "last_program": "PRG_12",
       "part": "PART_NO05",
       "total": 12
     },
     {
-      "last_program": 10,
+      "last_position": 10,
+      "last_program": "PRG_10",
       "part": "PART_NO06",
       "total": 5
     },
     {
-      "last_program": 8,
+      "last_position": 8,
+      "last_program": "PRG_08",
       "part": "PART_NO07",
       "total": 8
     },
     {
-      "last_program": 11,
+      "last_position": 11,
+      "last_program": "PRG_11",
       "part": "PART_NO08",
       "total": 5
     },
     {
-      "last_program": 8,
+      "last_position": 8,
+      "last_program": "PRG_08",
       "part": "PART_NO09",
       "total": 8
     },
     {
-      "last_program": 9,
+      "last_position": 9,
+      "last_program": "PRG_09",
       "part": "PART_NO10",
       "total": 9
     },
     {
-      "last_program": 11,
+      "last_position": 11,
+      "last_program": "PRG_11",
       "part": "PART_NO11",
       "total": 7
     },
     {
-      "last_program": 10,
+      "last_position": 10,
+      "last_program": "PRG_10",
       "part": "PART_NO12",
       "total": 4
     },
     {
-      "last_program": 1,
+      "last_position": 1,
+      "last_program": "PRG_01",
       "part": "PART_NO13",
       "total": 3
     },
     {
-      "last_program": 2,
+      "last_position": 2,
+      "last_program": "PRG_02",
       "part": "PART_NO14",
       "total": 3
     }
@@ -128,6 +142,20 @@
     }
   },
   "programs": 12,
+  "realistic_names": {
+    "1": "000101zz201001",
+    "10": "000102zz204001",
+    "11": "000103zz201001",
+    "12": "000103zz202001",
+    "2": "000101zz201002",
+    "3": "000101zz201003",
+    "4": "000101zz201005",
+    "5": "000101zz201006",
+    "6": "000101zz202003",
+    "7": "000101zz202004",
+    "8": "000102zz201001",
+    "9": "000102zz203001"
+  },
   "sheet_sizes": {
     "1": [
       2500,

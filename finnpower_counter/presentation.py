@@ -88,7 +88,7 @@ def filter_statuses(statuses: Iterable[PartStatus],
 def row(status: PartStatus) -> List[str]:
     return [status.part,
             str(status.total),
-            str(status.last_program),
+            status.last_program,
             '{} / {}'.format(status.produced, status.total),
             status_text(status)]
 
@@ -98,7 +98,7 @@ def rows(statuses: Iterable[PartStatus]) -> List[List[str]]:
 
 
 def program_row(nest: ProgramNest, done: Optional[int] = None) -> List[str]:
-    executed = done is not None and nest.number <= done
+    executed = done is not None and nest.position <= done
     return [nest.name,
             nest.sheet_size or '—',
             '—' if nest.sheet_count is None else str(nest.sheet_count),
@@ -120,20 +120,21 @@ def filter_programs(programs: Iterable[ProgramNest],
 
     В этом режиме «готово» означает «программа выполнена».
 
-    Поиск: если введены одни цифры — это номер программы, и совпадение
-    точное. Иначе подстрока в имени. Без этого разделения ввод «1» вытаскивал
-    бы заодно PRG_10, PRG_11 и PRG_12, что оператору только мешает.
+    Поиск: цифры, совпавшие с местом в задании, дают ровно эту программу —
+    иначе ввод «1» вытаскивал бы заодно PRG_10, PRG_11 и PRG_12. Если такого
+    места нет, цифры ищутся как подстрока: в именах вида 000102zz201001
+    оператор ищет именно куском имени.
     """
     result = list(programs)
     if only == ONLY_DONE:
-        result = [p for p in result if done is not None and p.number <= done]
+        result = [p for p in result if done is not None and p.position <= done]
     elif only == ONLY_WORK:
-        result = [p for p in result if done is None or p.number > done]
+        result = [p for p in result if done is None or p.position > done]
     if search:
         needle = search.strip().lower()
-        if needle.isdigit():
-            number = int(needle)
-            result = [p for p in result if p.number == number]
+        if needle.isdigit() and any(p.position == int(needle) for p in result):
+            place = int(needle)
+            result = [p for p in result if p.position == place]
         elif needle:
             result = [p for p in result if needle in p.name.lower()]
     return result
@@ -146,15 +147,15 @@ def part_detail_rows(part: PartTotal,
     Накопительный столбец отвечает на вопрос оператора «сколько будет
     в сумме, когда отработает эта программа».
     """
-    by_number = {nest.number: nest for nest in programs}
+    by_place = {nest.position: nest for nest in programs}
     running = 0
     result = []
-    for number in sorted(part.by_program):
-        count = part.by_program[number]
+    for place in sorted(part.by_program):
+        count = part.by_program[place]
         running += count
-        nest = by_number.get(number)
+        nest = by_place.get(place)
         result.append([
-            nest.name if nest else str(number),
+            nest.name if nest else str(place),
             '—' if nest is None or nest.sheet_count is None else str(nest.sheet_count),
             str(nest.parts_per_sheet.get(part.part, '—')) if nest else '—',
             str(count),

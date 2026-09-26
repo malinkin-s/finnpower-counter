@@ -40,9 +40,15 @@ class ProgramNest:
 
     parts_per_sheet — количество на ОДНОМ листе, уже просуммированное по всем
     блокам PART_DATA этой детали. Тираж в программе даёт pieces().
+
+    position — место в сменном задании, от 1. Именно оно задаёт порядок
+    выполнения и по нему считается крайняя программа позиции. number —
+    справочное число из имени файла, для расчётов негодное: на именах
+    с датой оно не возрастает и не уникально.
     """
 
-    number: int
+    position: int
+    number: Optional[int]
     name: str
     path: str
     sheet_count: Optional[int]
@@ -88,11 +94,16 @@ class ProgramNest:
 
 @dataclasses.dataclass
 class PartTotal:
-    """Итог по позиции за смену."""
+    """Итог по позиции за смену.
+
+    last_position — место крайней программы в задании, для сравнений.
+    last_program — её имя, для показа. by_program — тираж по местам задания.
+    """
 
     part: str
     total: int
-    last_program: int
+    last_position: int
+    last_program: str
     by_program: Dict[int, int] = dataclasses.field(default_factory=dict)
 
 
@@ -117,17 +128,24 @@ class ShiftSummary:
         return sum(p.total for p in self.parts)
 
     @property
-    def program_numbers(self) -> List[int]:
-        return [p.number for p in self.usable_programs]
+    def positions(self) -> List[int]:
+        return [p.position for p in self.usable_programs]
+
+    def by_position(self, position: int) -> Optional[ProgramNest]:
+        for nest in self.programs:
+            if nest.position == position:
+                return nest
+        return None
 
 
 @dataclasses.dataclass
 class PartStatus:
-    """Состояние позиции на момент, когда выполнены программы по номер done."""
+    """Состояние позиции, когда выполнены программы по место done."""
 
     part: str
     total: int
-    last_program: int
+    last_position: int
+    last_program: str
     produced: int
 
     @property

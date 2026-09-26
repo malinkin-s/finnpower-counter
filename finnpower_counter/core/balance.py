@@ -14,13 +14,15 @@ from .syntax import DEFAULT_SYNTAX, MachineSyntax
 def summarize(programs: List[ProgramNest]) -> ShiftSummary:
     """Свести тираж по позициям за смену.
 
-    Обход строго по возрастанию номера программы: крайняя программа позиции —
-    это последняя по порядку выполнения, а не последняя по алфавиту имени.
+    Обход строго по местам в задании: крайняя программа позиции — последняя
+    по порядку выполнения, а не последняя по алфавиту имени и не с наибольшим
+    числом в имени.
     """
-    ordered = sorted(programs, key=lambda p: p.number)
+    ordered = sorted(programs, key=lambda p: p.position)
 
     totals: Dict[str, int] = {}
     last: Dict[str, int] = {}
+    last_name: Dict[str, str] = {}
     by_program: Dict[str, Dict[int, int]] = {}
 
     for nest in ordered:
@@ -30,12 +32,14 @@ def summarize(programs: List[ProgramNest]) -> ShiftSummary:
             if count <= 0:
                 continue
             totals[part] = totals.get(part, 0) + count
-            last[part] = nest.number
-            by_program.setdefault(part, {})[nest.number] = count
+            last[part] = nest.position
+            last_name[part] = nest.name
+            by_program.setdefault(part, {})[nest.position] = count
 
     parts = [PartTotal(part=part,
                        total=totals[part],
-                       last_program=last[part],
+                       last_position=last[part],
+                       last_program=last_name[part],
                        by_program=by_program.get(part, {}))
              for part in sorted(totals)]
 
@@ -47,23 +51,67 @@ def summarize(programs: List[ProgramNest]) -> ShiftSummary:
     return ShiftSummary(programs=ordered, parts=parts, warnings=warnings)
 
 
-def status_at(summary: ShiftSummary, done_program: Optional[int]) -> List[PartStatus]:
-    """Состояние позиций, когда выполнены все программы по номер done_program.
+def status_at(summary: ShiftSummary, done: Optional[int]) -> List[PartStatus]:
+    """Состояние позиций, когда выполнены программы по место done.
 
-    done_program=None — смена ещё не начата, изготовлено ноль.
+    done=None — смена ещё не начата, изготовлено ноль.
     """
     statuses = []
     for part in summary.parts:
-        if done_program is None:
+        if done is None:
             produced = 0
         else:
-            produced = sum(count for number, count in part.by_program.items()
-                           if number <= done_program)
+            produced = sum(count for place, count in part.by_program.items()
+                           if place <= done)
         statuses.append(PartStatus(part=part.part,
                                    total=part.total,
+                                   last_position=part.last_position,
                                    last_program=part.last_program,
                                    produced=produced))
     return statuses
+
+
+def resolve_position(summary: ShiftSummary, text: str) -> Optional[int]:
+    """Понять, какую программу назвал оператор.
+
+    Принимает три вида ввода, потому что на разных производствах программы
+    называются по-разному:
+
+    * пустая строка — смена не начата;
+    * место в задании, 1..N — привычный случай, когда файлы PRG_01..PRG_30;
+    * имя программы целиком или его отличимый кусок — для имён вида
+      000101zz201001, где место приходится считать, а имя оператор видит
+      на стойке.
+
+    Место проверяется первым: цифры чаще означают именно его.
+    """
+    text = (text or '').strip()
+    if not text:
+        return None
+
+    places = summary.positions
+    if text.isdigit():
+        place = int(text)
+        if place in places:
+            return place
+
+    lowered = text.lower()
+    exact = [n for n in summary.usable_programs if n.name.lower() == lowered]
+    if len(exact) == 1:
+        return exact[0].position
+
+    partial = [n for n in summary.usable_programs if lowered in n.name.lower()]
+    if len(partial) == 1:
+        return partial[0].position
+    if len(partial) > 1:
+        raise ValueError(Note('done.ambiguous', {
+            'text': text,
+            'names': ', '.join(n.name for n in partial[:4])}))
+
+    if text.isdigit() and places and int(text) > max(places):
+        return max(places)
+
+    raise ValueError(Note('done.unknown', {'text': text}))
 
 
 def cross_check(programs: List[ProgramNest],

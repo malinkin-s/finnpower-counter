@@ -22,18 +22,20 @@ def test_алфавит_и_номер_дают_разный_порядок(fixtu
     names = [n for n in os.listdir(os.path.join(fixtures_dir, 'unpadded'))
              if n.endswith('.nc')]
     by_name = sorted(names)
-    by_number = sorted(names, key=lambda n: reader.program_number(n))
+    by_number = sorted(names, key=reader.natural_key)
     assert by_name != by_number, 'набор должен ловить ловушку сортировки'
 
 
 def test_свод_не_зависит_от_ведущих_нулей(fixtures_dir, expected):
     summary = balance.load_shift(os.path.join(fixtures_dir, 'unpadded'))
-    got = [{'part': p.part, 'total': p.total, 'last_program': p.last_program}
+    got = [{'part': p.part, 'total': p.total, 'last_position': p.last_position}
            for p in summary.parts]
-    assert got == expected['parts']
+    want = [{k: v for k, v in p.items() if k != 'last_program'}
+            for p in expected['parts']]
+    assert got == want
 
 
-def test_программы_идут_по_возрастанию_номера(fixtures_dir):
+def test_места_идут_подряд(fixtures_dir):
     summary = balance.load_shift(os.path.join(fixtures_dir, 'unpadded'))
-    numbers = [p.number for p in summary.programs]
-    assert numbers == sorted(numbers)
+    places = [p.position for p in summary.programs]
+    assert places == list(range(1, len(places) + 1))

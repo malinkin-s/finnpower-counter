@@ -53,6 +53,26 @@ TOOLS = ['TOOL_NA01', 'TOOL_NA11', 'TOOL_NA20', 'TOOL_NA22', 'TOOL_NA31']
 DEFAULT_SHEET = (2500, 1250)
 SHEET_OVERRIDES = {6: (3000, 1500), 10: (600, 415)}
 
+# Имена в стиле реального производства: ДДММГГ + код участка + номер.
+# Набор подобран так, чтобы ловить ровно те ловушки, которых нет в PRG_01..12:
+#   * число в конце имени не возрастает — после ...202004 идёт ...201001;
+#   * три имени дают одинаковый хвост 201001, потому что даты разные.
+# Порядок выполнения при этом задаётся естественной сортировкой имени.
+REALISTIC_NAMES = {
+    1: '000101zz201001',
+    2: '000101zz201002',
+    3: '000101zz201003',
+    4: '000101zz201005',
+    5: '000101zz201006',
+    6: '000101zz202003',
+    7: '000101zz202004',
+    8: '000102zz201001',
+    9: '000102zz203001',
+    10: '000102zz204001',
+    11: '000103zz201001',
+    12: '000103zz202001',
+}
+
 # Программы, у которых карты наладки нет. В реальном задании PDF есть не
 # у всех, и утилита обязана переживать это без ошибки.
 WITHOUT_DOCUMENT = {4, 9}
@@ -134,9 +154,11 @@ def expected_balance(shift):
         parts.append({
             'part': name,
             'total': totals[name],
-            'last_program': last_prg[name],
+            'last_position': last_prg[name],
+            'last_program': 'PRG_{:02d}'.format(last_prg[name]),
         })
     return {
+        'realistic_names': {str(k): v for k, v in sorted(REALISTIC_NAMES.items())},
         'sheet_sizes': {str(k): list(sheet_size(k)) for k in sorted(shift)},
         'without_document': sorted(WITHOUT_DOCUMENT),
         'programs': len(shift),
@@ -367,7 +389,18 @@ def main():
         write(os.path.join(unpadded_dir, 'PRG_{}.fms'.format(prg)),
               fms_text(prg, sheets, blocks, name_fmt='PRG_{}'))
 
-    # 3. Краевые случаи
+    # 3. Имена реального вида: ловушка на порядок выполнения
+    realistic_dir = os.path.join(FIXTURES, 'realistic')
+    os.makedirs(realistic_dir)
+    for prg in sorted(SHIFT):
+        sheets, blocks, scrap = SHIFT[prg]
+        stem = REALISTIC_NAMES[prg]
+        write(os.path.join(realistic_dir, stem + '.nc'),
+              nc_text(prg, sheets, blocks, scrap, name_fmt='{}'.format(stem)))
+        write(os.path.join(realistic_dir, stem + '.fms'),
+              fms_text(prg, sheets, blocks, name_fmt='{}'.format(stem)))
+
+    # 4. Краевые случаи
     edge_dir = os.path.join(FIXTURES, 'edge')
     os.makedirs(edge_dir)
     notes = {}
@@ -377,7 +410,7 @@ def main():
     write(os.path.join(edge_dir, 'README.json'),
           json.dumps(notes, ensure_ascii=False, indent=2, sort_keys=True) + '\n')
 
-    # 4. Эталонный свод
+    # 5. Эталонный свод
     expected = expected_balance(SHIFT)
     write(os.path.join(FIXTURES, 'expected.json'),
           json.dumps(expected, ensure_ascii=False, indent=2, sort_keys=True) + '\n')
@@ -386,6 +419,7 @@ def main():
         expected['programs'], expected['unique_parts'], expected['total_pieces']))
     print('shift_ok:       {} файлов'.format(len(os.listdir(shift_dir))))
     print('unpadded:       {} файлов'.format(len(os.listdir(unpadded_dir))))
+    print('realistic:      {} файлов'.format(len(os.listdir(realistic_dir))))
     print('edge:           {} файлов'.format(len(os.listdir(edge_dir))))
     print('эталон:         tests/fixtures/expected.json')
 

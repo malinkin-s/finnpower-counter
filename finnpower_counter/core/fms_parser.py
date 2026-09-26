@@ -58,7 +58,8 @@ def parse_text(text: str,
                              {'section': FMS_SECTIONS['rscut']}))
 
     return ProgramNest(
-        number=number if number is not None else -1,
+        position=0,
+        number=number,
         name=name,
         path=path,
         sheet_count=sheet_count,

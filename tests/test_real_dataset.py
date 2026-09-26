@@ -50,8 +50,15 @@ def test_баланс_сходится(shift):
     assert shift.total_pieces == by_program
 
 
-def test_крайняя_программа_не_больше_номера_последней(shift):
-    last = max(p.number for p in shift.usable_programs)
+def test_крайняя_программа_не_дальше_конца_задания(shift):
+    last = max(p.position for p in shift.usable_programs)
+    names = {p.name for p in shift.usable_programs}
     for part in shift.parts:
-        assert part.last_program <= last
+        assert part.last_position <= last
+        assert part.last_program in names
         assert part.total == sum(part.by_program.values())
+
+
+def test_места_идут_подряд_без_пропусков(shift):
+    places = [p.position for p in shift.programs]
+    assert places == list(range(1, len(places) + 1))

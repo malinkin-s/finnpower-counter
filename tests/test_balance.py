@@ -13,7 +13,8 @@ def test_итог_совпадает_с_эталоном(shift_ok, expected):
 
 
 def test_каждая_позиция_совпадает_с_эталоном(shift_ok, expected):
-    got = [{'part': p.part, 'total': p.total, 'last_program': p.last_program}
+    got = [{'part': p.part, 'total': p.total,
+            'last_position': p.last_position, 'last_program': p.last_program}
            for p in shift_ok.parts]
     assert got == expected['parts']
 
@@ -59,8 +60,8 @@ def test_к_концу_смены_изготовлено_всё(shift_ok, expect
 
 def test_позиция_закрыта_ровно_на_своей_крайней_программе(shift_ok):
     for part in shift_ok.parts:
-        before = balance.status_at(shift_ok, part.last_program - 1)
-        after = balance.status_at(shift_ok, part.last_program)
+        before = balance.status_at(shift_ok, part.last_position - 1)
+        after = balance.status_at(shift_ok, part.last_position)
         assert not [s for s in before if s.part == part.part][0].is_complete
         assert [s for s in after if s.part == part.part][0].is_complete
 
