@@ -53,8 +53,8 @@ def decode(raw: bytes, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Tuple[str, str
     Переводы строк приводятся к \\n: иначе \\r остаётся в конце строки и
     регулярные выражения с якорем на конец строки перестают срабатывать.
     """
-    candidates = []  # type: List[Tuple[float, int, str, str]]
-    last_error = None  # type: Optional[Exception]
+    candidates: List[Tuple[float, int, str, str]] = []
+    last_error: Optional[Exception] = None
 
     for order, encoding in enumerate(syntax.encodings):
         try:

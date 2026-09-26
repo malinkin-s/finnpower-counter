@@ -6,7 +6,6 @@ import os
 import pytest
 
 from finnpower_counter.core import nc_parser
-from finnpower_counter.core.syntax import DEFAULT_SYNTAX
 
 HEADER = 'SHEET_COUNT={sheets}\n'
 BLOCK = (

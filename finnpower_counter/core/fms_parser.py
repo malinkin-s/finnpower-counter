@@ -15,8 +15,7 @@ from .model import ProgramNest
 from .syntax import DEFAULT_SYNTAX, FMS_SECTIONS, MachineSyntax
 
 
-def _section(text, marker):
-    # type: (str, str) -> str
+def _section(text: str, marker: str) -> str:
     """Текст от маркера секции до следующего маркера верхнего уровня."""
     if marker not in text:
         return ''
@@ -29,10 +28,13 @@ def _section(text, marker):
     return '\n'.join(lines)
 
 
-def parse_text(text, name, path='', number=None, syntax=DEFAULT_SYNTAX):
-    # type: (str, str, str, Optional[int], MachineSyntax) -> ProgramNest
+def parse_text(text: str,
+               name: str,
+               path: str = '',
+               number: Optional[int] = None,
+               syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest:
     text = reader.normalize_newlines(text)
-    warnings = []  # type: List[str]
+    warnings: List[str] = []
 
     match = syntax.fms_sheet_count.search(text)
     if match is None:
@@ -41,7 +43,7 @@ def parse_text(text, name, path='', number=None, syntax=DEFAULT_SYNTAX):
     else:
         sheet_count = int(match.group(1))
 
-    parts = {}  # type: Dict[str, int]
+    parts: Dict[str, int] = {}
     rscut = _section(text, FMS_SECTIONS['rscut'])
     for part, qty in syntax.fms_rscut_part.findall(rscut):
         if syntax.is_scrap(part):
@@ -60,11 +62,11 @@ def parse_text(text, name, path='', number=None, syntax=DEFAULT_SYNTAX):
     )
 
 
-def parse_components(text, syntax=DEFAULT_SYNTAX):
-    # type: (str, MachineSyntax) -> Dict[str, int]
+def parse_components(text: str,
+                     syntax: MachineSyntax = DEFAULT_SYNTAX) -> Dict[str, int]:
     """Количества из секции #COMPONENTS — построчно по блокам, затем сумма."""
     text = reader.normalize_newlines(text)
-    parts = {}  # type: Dict[str, int]
+    parts: Dict[str, int] = {}
     section = _section(text, FMS_SECTIONS['components'])
     for part, qty in syntax.fms_component_part.findall(section):
         if syntax.is_scrap(part):
@@ -73,16 +75,14 @@ def parse_components(text, syntax=DEFAULT_SYNTAX):
     return parts
 
 
-def parse_file(path, syntax=DEFAULT_SYNTAX):
-    # type: (str, MachineSyntax) -> ProgramNest
+def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest:
     text, _ = reader.read_text(path, syntax)
     name = os.path.splitext(os.path.basename(path))[0]
     return parse_text(text, name=name, path=path,
                       number=reader.program_number(path, syntax), syntax=syntax)
 
 
-def find_report(nc_path, syntax=DEFAULT_SYNTAX):
-    # type: (str, MachineSyntax) -> Optional[str]
+def find_report(nc_path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Optional[str]:
     """Найти отчёт наладки рядом с программой."""
     stem = os.path.splitext(nc_path)[0]
     for suffix in syntax.fms_suffixes:

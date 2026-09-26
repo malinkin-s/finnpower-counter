@@ -15,6 +15,7 @@ import json
 import sys
 from typing import List, Optional
 
+from . import presentation
 from .core import balance
 from .core.model import PartStatus, ShiftSummary
 from .core.syntax import DEFAULT_SYNTAX
@@ -23,7 +24,7 @@ EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_WARNINGS = 2
 
-COLUMNS = ('Артикул', 'Всего в заказе', 'Крайняя УП', 'Готово сейчас', 'Статус')
+COLUMNS = presentation.COLUMNS
 
 
 def _write(stream, text):
@@ -39,16 +40,8 @@ def _write(stream, text):
         stream.write(text.encode(encoding, 'replace').decode(encoding) + '\n')
 
 
-def _rows(statuses):
-    # type: (List[PartStatus]) -> List[List[str]]
-    return [[s.part, str(s.total), str(s.last_program),
-             '{} / {}'.format(s.produced, s.total), s.status]
-            for s in statuses]
-
-
-def _table(statuses):
-    # type: (List[PartStatus]) -> List[str]
-    rows = _rows(statuses)
+def _table(statuses: List[PartStatus]) -> List[str]:
+    rows = presentation.rows(statuses)
     widths = [len(head) for head in COLUMNS]
     for row in rows:
         for index, cell in enumerate(row):
@@ -65,20 +58,9 @@ def _table(statuses):
     return out
 
 
-def _filter(statuses, only, search):
-    # type: (List[PartStatus], str, Optional[str]) -> List[PartStatus]
-    if only == 'done':
-        statuses = [s for s in statuses if s.is_complete]
-    elif only == 'work':
-        statuses = [s for s in statuses if not s.is_complete]
-    if search:
-        needle = search.strip().lower()
-        statuses = [s for s in statuses if needle in s.part.lower()]
-    return statuses
-
-
-def _as_json(summary, statuses, check):
-    # type: (ShiftSummary, List[PartStatus], Optional[object]) -> str
+def _as_json(summary: ShiftSummary,
+             statuses: List[PartStatus],
+             check: Optional[object]) -> str:
     payload = {
         'programs': len(summary.usable_programs),
         'unique_parts': summary.unique_parts,
@@ -112,7 +94,7 @@ def build_parser():
                              'без него смена считается не начатой')
     parser.add_argument('-s', '--search', metavar='ТЕКСТ',
                         help='показать только позиции, содержащие текст')
-    parser.add_argument('--only', choices=('all', 'done', 'work'), default='all',
+    parser.add_argument('--only', choices=presentation.ONLY_CHOICES, default='all',
                         help='какие позиции показывать (по умолчанию all)')
     parser.add_argument('--validate', action='store_true',
                         help='сверить разбор с отчётами наладки .fms')
@@ -121,8 +103,9 @@ def build_parser():
     return parser
 
 
-def main(argv=None, stdout=None, stderr=None):
-    # type: (Optional[List[str]], Optional[object], Optional[object]) -> int
+def main(argv: Optional[List[str]] = None,
+         stdout: Optional[object] = None,
+         stderr: Optional[object] = None) -> int:
     args = build_parser().parse_args(argv)
     out = stdout if stdout is not None else sys.stdout
     err = stderr if stderr is not None else sys.stderr
@@ -140,7 +123,7 @@ def main(argv=None, stdout=None, stderr=None):
         return EXIT_ERROR
 
     statuses = balance.status_at(summary, args.done)
-    shown = _filter(statuses, args.only, args.search)
+    shown = presentation.filter_statuses(statuses, args.only, args.search)
 
     check = balance.cross_check(summary.programs, DEFAULT_SYNTAX) if args.validate else None
 

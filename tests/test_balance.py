@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Свод смены против эталона."""
 
-import os
-
 import pytest
 
 from finnpower_counter.core import balance

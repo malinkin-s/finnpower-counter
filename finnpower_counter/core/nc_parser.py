@@ -9,11 +9,14 @@ from .model import ProgramNest
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
 
 
-def parse_text(text, name, path='', number=None, syntax=DEFAULT_SYNTAX):
-    # type: (str, str, str, Optional[int], MachineSyntax) -> ProgramNest
+def parse_text(text: str,
+               name: str,
+               path: str = '',
+               number: Optional[int] = None,
+               syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest:
     """Разобрать текст программы."""
     text = reader.normalize_newlines(text)
-    warnings = []  # type: List[str]
+    warnings: List[str] = []
 
     match = syntax.sheet_count.search(text)
     if match is None:
@@ -55,8 +58,7 @@ def parse_text(text, name, path='', number=None, syntax=DEFAULT_SYNTAX):
     )
 
 
-def parse_file(path, syntax=DEFAULT_SYNTAX):
-    # type: (str, MachineSyntax) -> ProgramNest
+def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest:
     """Разобрать файл программы."""
     text, encoding = reader.read_text(path, syntax)
     name = os.path.splitext(os.path.basename(path))[0]
@@ -70,8 +72,8 @@ def parse_file(path, syntax=DEFAULT_SYNTAX):
     return nest
 
 
-def collect_programs(directory, syntax=DEFAULT_SYNTAX):
-    # type: (str, MachineSyntax) -> List[ProgramNest]
+def collect_programs(directory: str,
+                     syntax: MachineSyntax = DEFAULT_SYNTAX) -> List[ProgramNest]:
     """Разобрать все программы в папке, по возрастанию номера."""
     nests = []
     for entry in sorted(os.listdir(directory)):

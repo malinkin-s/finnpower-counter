@@ -10,8 +10,7 @@ from .model import (CrossCheckResult, PartStatus, PartTotal, ProgramNest,
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
 
 
-def summarize(programs):
-    # type: (List[ProgramNest]) -> ShiftSummary
+def summarize(programs: List[ProgramNest]) -> ShiftSummary:
     """Свести тираж по позициям за смену.
 
     Обход строго по возрастанию номера программы: крайняя программа позиции —
@@ -19,9 +18,9 @@ def summarize(programs):
     """
     ordered = sorted(programs, key=lambda p: p.number)
 
-    totals = {}  # type: Dict[str, int]
-    last = {}  # type: Dict[str, int]
-    by_program = {}  # type: Dict[str, Dict[int, int]]
+    totals: Dict[str, int] = {}
+    last: Dict[str, int] = {}
+    by_program: Dict[str, Dict[int, int]] = {}
 
     for nest in ordered:
         if not nest.is_usable:
@@ -39,7 +38,7 @@ def summarize(programs):
                        by_program=by_program.get(part, {}))
              for part in sorted(totals)]
 
-    warnings = []  # type: List[str]
+    warnings: List[str] = []
     for nest in ordered:
         for text in nest.warnings:
             warnings.append('{}: {}'.format(nest.name, text))
@@ -47,8 +46,7 @@ def summarize(programs):
     return ShiftSummary(programs=ordered, parts=parts, warnings=warnings)
 
 
-def status_at(summary, done_program):
-    # type: (ShiftSummary, Optional[int]) -> List[PartStatus]
+def status_at(summary: ShiftSummary, done_program: Optional[int]) -> List[PartStatus]:
     """Состояние позиций, когда выполнены все программы по номер done_program.
 
     done_program=None — смена ещё не начата, изготовлено ноль.
@@ -67,8 +65,8 @@ def status_at(summary, done_program):
     return statuses
 
 
-def cross_check(programs, syntax=DEFAULT_SYNTAX):
-    # type: (List[ProgramNest], MachineSyntax) -> CrossCheckResult
+def cross_check(programs: List[ProgramNest],
+                syntax: MachineSyntax = DEFAULT_SYNTAX) -> CrossCheckResult:
     """Сверить разбор каждой программы с её отчётом наладки.
 
     Сверяются три независимых источника: .nc, секция #RSCUT и секция
@@ -108,8 +106,7 @@ def cross_check(programs, syntax=DEFAULT_SYNTAX):
     return result
 
 
-def load_shift(directory, syntax=DEFAULT_SYNTAX):
-    # type: (str, MachineSyntax) -> ShiftSummary
+def load_shift(directory: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ShiftSummary:
     """Прочитать папку со сменным заданием и свести её."""
     if not os.path.isdir(directory):
         raise NotADirectoryError('нет такой папки: {}'.format(directory))
