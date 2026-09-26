@@ -1,0 +1,120 @@
+{
+  "parts": [
+    {
+      "last_program": 7,
+      "part": "PART_NO01",
+      "total": 6
+    },
+    {
+      "last_program": 12,
+      "part": "PART_NO02",
+      "total": 14
+    },
+    {
+      "last_program": 9,
+      "part": "PART_NO03",
+      "total": 4
+    },
+    {
+      "last_program": 12,
+      "part": "PART_NO04",
+      "total": 7
+    },
+    {
+      "last_program": 12,
+      "part": "PART_NO05",
+      "total": 12
+    },
+    {
+      "last_program": 10,
+      "part": "PART_NO06",
+      "total": 5
+    },
+    {
+      "last_program": 8,
+      "part": "PART_NO07",
+      "total": 8
+    },
+    {
+      "last_program": 11,
+      "part": "PART_NO08",
+      "total": 5
+    },
+    {
+      "last_program": 8,
+      "part": "PART_NO09",
+      "total": 8
+    },
+    {
+      "last_program": 9,
+      "part": "PART_NO10",
+      "total": 9
+    },
+    {
+      "last_program": 11,
+      "part": "PART_NO11",
+      "total": 7
+    },
+    {
+      "last_program": 10,
+      "part": "PART_NO12",
+      "total": 4
+    }
+  ],
+  "per_program": {
+    "1": {
+      "PART_NO01": 2,
+      "PART_NO02": 4,
+      "PART_NO05": 1
+    },
+    "10": {
+      "PART_NO06": 2,
+      "PART_NO12": 1
+    },
+    "11": {
+      "PART_NO08": 3,
+      "PART_NO11": 1
+    },
+    "12": {
+      "PART_NO02": 2,
+      "PART_NO04": 2,
+      "PART_NO05": 4
+    },
+    "2": {
+      "PART_NO03": 2,
+      "PART_NO05": 2,
+      "PART_NO07": 6
+    },
+    "3": {
+      "PART_NO02": 8,
+      "PART_NO09": 4
+    },
+    "4": {
+      "PART_NO04": 5,
+      "PART_NO10": 1
+    },
+    "5": {
+      "PART_NO05": 5
+    },
+    "6": {
+      "PART_NO06": 3,
+      "PART_NO11": 6
+    },
+    "7": {
+      "PART_NO01": 4,
+      "PART_NO08": 2,
+      "PART_NO12": 3
+    },
+    "8": {
+      "PART_NO07": 2,
+      "PART_NO09": 4
+    },
+    "9": {
+      "PART_NO03": 2,
+      "PART_NO10": 8
+    }
+  },
+  "programs": 12,
+  "total_pieces": 89,
+  "unique_parts": 12
+}

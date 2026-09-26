@@ -1,0 +1,34 @@
+{
+  "cp1251.nc": {
+    "description": "Кириллица в комментарии, кодировка windows-1251",
+    "encoding": "cp1251"
+  },
+  "cp866.nc": {
+    "description": "Кириллица в комментарии, кодировка cp866",
+    "encoding": "cp866"
+  },
+  "crlf.nc": {
+    "description": "Те же данные, но перенос строк CRLF",
+    "encoding": "utf-8"
+  },
+  "empty.nc": {
+    "description": "Пустой файл",
+    "encoding": "utf-8"
+  },
+  "no_quantity.nc": {
+    "description": "Блок PART_DATA без QUANTITY",
+    "encoding": "utf-8"
+  },
+  "no_sheet_count.nc": {
+    "description": "Нет объявления SHEET_COUNT, но есть IF со SHEET_COUNT",
+    "encoding": "utf-8"
+  },
+  "only_scrap.nc": {
+    "description": "Только обрезки, деталей нет",
+    "encoding": "utf-8"
+  },
+  "zero_sheets.nc": {
+    "description": "SHEET_COUNT=0 — программа в задание не пошла",
+    "encoding": "utf-8"
+  }
+}
