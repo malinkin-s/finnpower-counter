@@ -5,7 +5,7 @@ import os
 from typing import List, Optional
 
 from . import reader
-from .model import ProgramNest
+from .model import Note, ProgramNest
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
 
 
@@ -16,16 +16,16 @@ def parse_text(text: str,
                syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest:
     """Разобрать текст программы."""
     text = reader.normalize_newlines(text)
-    warnings: List[str] = []
+    warnings: List[Note] = []
 
     match = syntax.sheet_count.search(text)
     if match is None:
         sheet_count = None
-        warnings.append('не найдено объявление SHEET_COUNT — тираж неизвестен')
+        warnings.append(Note('warn.no_sheet_count'))
     else:
         sheet_count = int(match.group(1))
         if sheet_count == 0:
-            warnings.append('SHEET_COUNT=0 — программа не даёт деталей')
+            warnings.append(Note('warn.zero_sheets'))
 
     parts = {}
     blocks = syntax.part_block.findall(text)
@@ -33,10 +33,9 @@ def parse_text(text: str,
         name_match = syntax.part_name.search(block)
         qty_match = syntax.quantity.search(block)
         if name_match is None or qty_match is None:
-            warnings.append(
-                'блок PART_DATA №{} пропущен: нет {}'.format(
-                    index,
-                    'PART_NAME' if name_match is None else 'QUANTITY'))
+            warnings.append(Note('warn.block_skipped', {
+                'index': index,
+                'field': 'PART_NAME' if name_match is None else 'QUANTITY'}))
             continue
         part = name_match.group(1).strip()
         if not part or syntax.is_scrap(part):
@@ -46,7 +45,7 @@ def parse_text(text: str,
         parts[part] = parts.get(part, 0) + int(qty_match.group(1))
 
     if blocks and not parts and not warnings:
-        warnings.append('в программе только служебные контуры, деталей нет')
+        warnings.append(Note('warn.only_scrap'))
 
     return ProgramNest(
         number=number if number is not None else -1,
@@ -66,9 +65,9 @@ def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest
 
     nest = parse_text(text, name=name, path=path, number=number, syntax=syntax)
     if number is None:
-        nest.warnings.append('в имени файла нет номера программы')
+        nest.warnings.append(Note('warn.no_number'))
     if encoding not in ('utf-8', 'utf-8-sig'):
-        nest.warnings.append('файл прочитан как {}'.format(encoding))
+        nest.warnings.append(Note('warn.encoding', {'encoding': encoding}))
     return nest
 
 

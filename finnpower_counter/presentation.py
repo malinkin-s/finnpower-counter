@@ -1,22 +1,38 @@
 # -*- coding: utf-8 -*-
 """Подготовка данных к показу: отбор, строки таблицы, выгрузка.
 
-Общее для консоли и окна. Вынесено из обоих, чтобы правила отбора и состав
-колонок были в одном месте и проверялись тестами без поднятия окна.
+Общее для консоли и окна. Вынесено из обоих, чтобы правила отбора, состав
+колонок и подписи были в одном месте и проверялись тестами без поднятия окна.
+
+Подписи берутся из i18n в момент вызова, а не при загрузке модуля: язык может
+смениться уже после того, как окно построено.
 """
 
 import csv
 import io
 from typing import Iterable, List, Optional, Sequence
 
-from .core.model import PartStatus, ShiftSummary
+from . import i18n
+from .core.model import CrossCheckResult, PartStatus, ShiftSummary
 
-COLUMNS = ('Артикул', 'Всего в заказе', 'Крайняя УП', 'Готово сейчас', 'Статус')
+# Устойчивые обозначения колонок. Порядок задаёт порядок в таблице и в CSV.
+COLUMN_KEYS = ('col.part', 'col.total', 'col.last_program',
+               'col.produced', 'col.status')
 
 ONLY_ALL = 'all'
 ONLY_DONE = 'done'
 ONLY_WORK = 'work'
 ONLY_CHOICES = (ONLY_ALL, ONLY_DONE, ONLY_WORK)
+
+
+def columns() -> List[str]:
+    """Подписи колонок на текущем языке."""
+    return [i18n.t(key) for key in COLUMN_KEYS]
+
+
+def status_text(status: PartStatus) -> str:
+    """Подпись статуса: 'Готово' / 'В работе' или их перевод."""
+    return i18n.t('status.' + status.status)
 
 
 def filter_statuses(statuses: Iterable[PartStatus],
@@ -44,7 +60,7 @@ def row(status: PartStatus) -> List[str]:
             str(status.total),
             str(status.last_program),
             '{} / {}'.format(status.produced, status.total),
-            status.status]
+            status_text(status)]
 
 
 def rows(statuses: Iterable[PartStatus]) -> List[List[str]]:
@@ -53,25 +69,26 @@ def rows(statuses: Iterable[PartStatus]) -> List[List[str]]:
 
 def counters(summary: ShiftSummary, statuses: Sequence[PartStatus]) -> str:
     """Строка с итогами смены."""
-    done = sum(1 for s in statuses if s.is_complete)
-    return ('Программ: {}    Позиций: {}    Деталей: {}    '
-            'Готово полностью: {} из {}').format(
-        len(summary.usable_programs), summary.unique_parts,
-        summary.total_pieces, done, len(statuses))
+    return i18n.t('counters',
+                  programs=len(summary.usable_programs),
+                  parts=summary.unique_parts,
+                  pieces=summary.total_pieces,
+                  done=sum(1 for s in statuses if s.is_complete),
+                  total=len(statuses))
 
 
-def cross_check_line(result: Optional[object]) -> str:
+def cross_check_line(result: Optional[CrossCheckResult]) -> str:
     """Строка о сверке с отчётами наладки."""
     if result is None:
-        return 'Сверка не выполнялась'
+        return i18n.t('check.none')
     if result.checked == 0:
-        return 'Сверка: отчёты наладки не найдены'
+        return i18n.t('check.not_found')
     if result.mismatches:
-        return 'Сверка: расхождений {} в {} отчётах'.format(
-            len(result.mismatches), result.checked)
-    line = 'Сверено с {} отчётами наладки, расхождений нет'.format(result.checked)
+        return i18n.t('check.mismatches',
+                      count=len(result.mismatches), checked=result.checked)
+    line = i18n.t('check.clean', checked=result.checked)
     if result.skipped:
-        line += ' (без отчёта: {})'.format(result.skipped)
+        line += i18n.t('check.skipped', count=result.skipped)
     return line
 
 
@@ -85,8 +102,8 @@ def to_csv(statuses: Iterable[PartStatus],
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=delimiter, lineterminator='\r\n')
     if done_program is not None:
-        writer.writerow(['Выполнено программ:', done_program])
-    writer.writerow(list(COLUMNS))
+        writer.writerow([i18n.t('csv.done_programs'), done_program])
+    writer.writerow(columns())
     for status in statuses:
         writer.writerow(row(status))
     return buffer.getvalue()

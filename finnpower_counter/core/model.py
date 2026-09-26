@@ -2,10 +2,36 @@
 """Модель данных: программа, итог по позиции, состояние смены."""
 
 import dataclasses
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-STATUS_DONE = 'Готово'
-STATUS_IN_WORK = 'В работе'
+from .. import i18n
+
+# Коды, а не подписи: перевод на язык интерфейса делает presentation.
+STATUS_DONE = 'done'
+STATUS_IN_WORK = 'in_work'
+
+
+@dataclasses.dataclass(frozen=True)
+class Note:
+    """Замечание разбора.
+
+    Хранится ключом и параметрами, а не готовой строкой: язык интерфейса
+    может смениться уже после того, как файлы разобраны.
+    """
+
+    key: str
+    params: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    program: Optional[str] = None
+
+    def text(self) -> str:
+        body = i18n.t(self.key, **self.params)
+        return '{}: {}'.format(self.program, body) if self.program else body
+
+    def __str__(self) -> str:
+        return self.text()
+
+    def with_program(self, program: str) -> 'Note':
+        return Note(key=self.key, params=self.params, program=program)
 
 
 @dataclasses.dataclass
@@ -21,7 +47,7 @@ class ProgramNest:
     path: str
     sheet_count: Optional[int]
     parts_per_sheet: Dict[str, int] = dataclasses.field(default_factory=dict)
-    warnings: List[str] = dataclasses.field(default_factory=list)
+    warnings: List[Note] = dataclasses.field(default_factory=list)
 
     @property
     def is_usable(self) -> bool:
@@ -60,7 +86,7 @@ class ShiftSummary:
 
     programs: List[ProgramNest] = dataclasses.field(default_factory=list)
     parts: List[PartTotal] = dataclasses.field(default_factory=list)
-    warnings: List[str] = dataclasses.field(default_factory=list)
+    warnings: List[Note] = dataclasses.field(default_factory=list)
 
     @property
     def usable_programs(self) -> List[ProgramNest]:
@@ -98,6 +124,7 @@ class PartStatus:
 
     @property
     def status(self) -> str:
+        """Код статуса. Подпись для показа даёт presentation.status_text."""
         return STATUS_DONE if self.is_complete else STATUS_IN_WORK
 
 
@@ -107,7 +134,7 @@ class CrossCheckResult:
 
     checked: int = 0
     skipped: int = 0
-    mismatches: List[str] = dataclasses.field(default_factory=list)
+    mismatches: List[Note] = dataclasses.field(default_factory=list)
 
     @property
     def is_clean(self) -> bool:

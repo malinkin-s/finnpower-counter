@@ -7,11 +7,18 @@ import os
 
 import pytest
 
-from finnpower_counter import cli
+from finnpower_counter import cli, presentation
 
 
-def run(argv):
-    """Запустить CLI, вернуть (код возврата, stdout, stderr)."""
+def run(argv, lang='ru'):
+    """Запустить CLI, вернуть (код возврата, stdout, stderr).
+
+    Язык задаётся явно: без него CLI берёт язык системы, и тесты зависели бы
+    от машины, на которой запускаются.
+    """
+    argv = list(argv)
+    if lang and not any(a == '--lang' or a.startswith('--lang=') for a in argv):
+        argv += ['--lang', lang]
     out, err = io.StringIO(), io.StringIO()
     code = cli.main(argv, stdout=out, stderr=err)
     return code, out.getvalue(), err.getvalue()
@@ -38,7 +45,7 @@ def test_без_номера_программы_смена_не_начата(shi
 
 def test_таблица_содержит_все_колонки(shift_dir):
     _, out, _ = run(['--dir', shift_dir, '--done', '5'])
-    for column in cli.COLUMNS:
+    for column in presentation.columns():
         assert column in out
 
 
@@ -130,3 +137,28 @@ def test_вывод_переживает_узкую_кодировку_конс�
     out, err = AsciiStream(), AsciiStream()
     assert cli.main(['--dir', shift_dir, '--done', '5'], stdout=out, stderr=err) == cli.EXIT_OK
     assert 'PART_NO01' in out.getvalue()
+
+
+def test_язык_задаётся_ключом(shift_dir):
+    _, ru, _ = run(['--dir', shift_dir, '--done', '9'], lang='ru')
+    _, en, _ = run(['--dir', shift_dir, '--done', '9'], lang='en')
+    assert 'Готово' in ru and 'Готово' not in en
+    assert 'Done' in en and 'Done' not in ru
+
+
+def test_колонки_переводятся(shift_dir):
+    from finnpower_counter import i18n
+    _, en, _ = run(['--dir', shift_dir, '--done', '5'], lang='en')
+    i18n.set_language('en')
+    try:
+        for column in presentation.columns():
+            assert column in en
+    finally:
+        i18n.set_language('ru')
+
+
+def test_замечания_переводятся(edge_dir):
+    _, ru, _ = run(['--dir', edge_dir, '--done', '1'], lang='ru')
+    _, en, _ = run(['--dir', edge_dir, '--done', '1'], lang='en')
+    assert 'Замечания при разборе' in ru
+    assert 'Notes from parsing' in en

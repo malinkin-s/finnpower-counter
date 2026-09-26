@@ -4,9 +4,10 @@
 import os
 from typing import Dict, List, Optional
 
+from .. import i18n
 from . import fms_parser, nc_parser, reader
-from .model import (CrossCheckResult, PartStatus, PartTotal, ProgramNest,
-                    ShiftSummary)
+from .model import (CrossCheckResult, Note, PartStatus, PartTotal,
+                    ProgramNest, ShiftSummary)
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
 
 
@@ -38,10 +39,10 @@ def summarize(programs: List[ProgramNest]) -> ShiftSummary:
                        by_program=by_program.get(part, {}))
              for part in sorted(totals)]
 
-    warnings: List[str] = []
+    warnings: List[Note] = []
     for nest in ordered:
-        for text in nest.warnings:
-            warnings.append('{}: {}'.format(nest.name, text))
+        for note in nest.warnings:
+            warnings.append(note.with_program(nest.name))
 
     return ShiftSummary(programs=ordered, parts=parts, warnings=warnings)
 
@@ -88,9 +89,10 @@ def cross_check(programs: List[ProgramNest],
         result.checked += 1
 
         if nest.sheet_count != from_rscut.sheet_count:
-            result.mismatches.append(
-                '{}: листов в программе {}, в отчёте {}'.format(
-                    nest.name, nest.sheet_count, from_rscut.sheet_count))
+            result.mismatches.append(Note('mismatch.sheets', {
+                'program': nest.name,
+                'mine': nest.sheet_count,
+                'theirs': from_rscut.sheet_count}))
 
         for label, other in (('#RSCUT', from_rscut.parts_per_sheet),
                              ('#COMPONENTS', from_components)):
@@ -99,9 +101,9 @@ def cross_check(programs: List[ProgramNest],
                     mine = nest.parts_per_sheet.get(part, 0)
                     theirs = other.get(part, 0)
                     if mine != theirs:
-                        result.mismatches.append(
-                            '{}: {} — в программе {}, в {} {}'.format(
-                                nest.name, part, mine, label, theirs))
+                        result.mismatches.append(Note('mismatch.part', {
+                            'program': nest.name, 'part': part,
+                            'mine': mine, 'section': label, 'theirs': theirs}))
 
     return result
 
@@ -109,11 +111,11 @@ def cross_check(programs: List[ProgramNest],
 def load_shift(directory: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ShiftSummary:
     """Прочитать папку со сменным заданием и свести её."""
     if not os.path.isdir(directory):
-        raise NotADirectoryError('нет такой папки: {}'.format(directory))
+        raise NotADirectoryError(
+            i18n.t('error.not_a_directory', path=directory))
     programs = nc_parser.collect_programs(directory, syntax)
     summary = summarize(programs)
     if not programs:
-        summary.warnings.append(
-            'в папке нет файлов программ ({})'.format(
-                ', '.join(syntax.nc_suffixes)))
+        summary.warnings.append(Note('warn.no_programs', {
+            'suffixes': ', '.join(syntax.nc_suffixes)}))
     return summary

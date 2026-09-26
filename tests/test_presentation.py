@@ -28,7 +28,7 @@ def test_строка_таблицы():
 
 
 def test_число_колонок_совпадает_с_числом_полей():
-    assert all(len(r) == len(presentation.COLUMNS) for r in presentation.rows(SAMPLE))
+    assert all(len(r) == len(presentation.COLUMN_KEYS) for r in presentation.rows(SAMPLE))
 
 
 def test_отбор_всех():
@@ -98,14 +98,14 @@ def test_csv_разбирается_обратно():
     text = presentation.to_csv(SAMPLE, done_program=9)
     rows = list(csv.reader(io.StringIO(text), delimiter=';'))
     assert rows[0] == ['Выполнено программ:', '9']
-    assert rows[1] == list(presentation.COLUMNS)
+    assert rows[1] == presentation.columns()
     assert len(rows) == 2 + len(SAMPLE)
     assert rows[2][0] == 'PART_NO01'
 
 
 def test_csv_без_номера_программы():
     rows = list(csv.reader(io.StringIO(presentation.to_csv(SAMPLE)), delimiter=';'))
-    assert rows[0] == list(presentation.COLUMNS)
+    assert rows[0] == presentation.columns()
 
 
 def test_csv_пишется_с_bom(tmp_path):

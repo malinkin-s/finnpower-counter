@@ -11,7 +11,7 @@ import os
 from typing import Dict, List, Optional
 
 from . import reader
-from .model import ProgramNest
+from .model import Note, ProgramNest
 from .syntax import DEFAULT_SYNTAX, FMS_SECTIONS, MachineSyntax
 
 
@@ -34,12 +34,12 @@ def parse_text(text: str,
                number: Optional[int] = None,
                syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest:
     text = reader.normalize_newlines(text)
-    warnings: List[str] = []
+    warnings: List[Note] = []
 
     match = syntax.fms_sheet_count.search(text)
     if match is None:
         sheet_count = None
-        warnings.append('в отчёте нет NUMBER OF SHEETS')
+        warnings.append(Note('warn.fms_no_sheets'))
     else:
         sheet_count = int(match.group(1))
 
@@ -50,7 +50,8 @@ def parse_text(text: str,
             continue
         parts[part] = parts.get(part, 0) + int(qty)
     if not rscut:
-        warnings.append('в отчёте нет секции {}'.format(FMS_SECTIONS['rscut']))
+        warnings.append(Note('warn.fms_no_section',
+                             {'section': FMS_SECTIONS['rscut']}))
 
     return ProgramNest(
         number=number if number is not None else -1,

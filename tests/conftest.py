@@ -10,6 +10,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
 
 
+@pytest.fixture(autouse=True)
+def _fixed_language():
+    """Тесты не должны зависеть от языка системы."""
+    from finnpower_counter import i18n
+    previous = i18n.current()
+    i18n.set_language('ru')
+    yield
+    i18n.set_language(previous)
+
+
 @pytest.fixture(scope='session')
 def fixtures_dir():
     return FIXTURES

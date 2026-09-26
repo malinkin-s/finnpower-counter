@@ -64,7 +64,7 @@ def test_блок_без_количества_пропускается_с_пре
     text = build(1, [('A', 1), ('B', 2)]).replace('QUANTITY=1\n', '')
     nest = nc_parser.parse_text(text, name='PRG_01', number=1)
     assert nest.parts_per_sheet == {'B': 2}
-    assert any('QUANTITY' in w for w in nest.warnings)
+    assert any('QUANTITY' in str(w) for w in nest.warnings)
 
 
 def test_без_sheet_count_программа_непригодна():
@@ -101,7 +101,7 @@ def test_пустой_файл():
 def test_только_обрезки():
     nest = nc_parser.parse_text(build(1, [('SCRAP', 1)]), name='PRG_01', number=1)
     assert nest.parts_per_sheet == {}
-    assert any('служебные' in w for w in nest.warnings)
+    assert any(w.key == 'warn.only_scrap' for w in nest.warnings)
 
 
 def test_незакрытый_блок_не_ломает_разбор():

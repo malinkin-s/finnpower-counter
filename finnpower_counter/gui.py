@@ -18,12 +18,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
-from . import presentation
+from . import i18n, presentation
 from .core import balance
 from .core.model import PartStatus, ShiftSummary
 from .core.syntax import DEFAULT_SYNTAX
-
-TITLE = 'Учёт готовности деталей'
 
 # Экран у стойки смотрят стоя и не вплотную — шрифт крупнее обычного.
 FONT = ('Segoe UI', 10)
@@ -70,11 +68,12 @@ class CounterApp(object):
         self.check = None
         self.directory: Optional[str] = None
 
-        self.var_dir = tk.StringVar(value='папка не выбрана')
+        self.var_dir = tk.StringVar(value=i18n.t('ui.no_dir'))
         self.var_done = tk.StringVar()
         self.var_search = tk.StringVar()
         self.var_only = tk.StringVar(value=presentation.ONLY_ALL)
-        self.var_counters = tk.StringVar(value='Папка со сменным заданием не выбрана')
+        self.var_counters = tk.StringVar(value=i18n.t('counters.empty'))
+        self.var_lang = tk.StringVar(value=i18n.current())
         self.var_check = tk.StringVar(value='')
 
         self._build()
@@ -89,7 +88,7 @@ class CounterApp(object):
     # --- построение окна ---
 
     def _build(self):
-        self.master.title(TITLE)
+        self.master.title(i18n.t('app.title'))
         self.master.minsize(760, 480)
         root = ttk.Frame(self.master, padding=10)
         root.pack(fill='both', expand=True)
@@ -103,49 +102,66 @@ class CounterApp(object):
         self._build_footer(root)
 
     def _build_source(self, parent):
-        box = ttk.LabelFrame(parent, text=' Сменное задание ', padding=8)
+        box = ttk.LabelFrame(parent, text=i18n.t('ui.shift'), padding=8)
+        self.box_shift = box
         box.grid(row=0, column=0, sticky='ew')
         box.columnconfigure(1, weight=1)
 
-        ttk.Button(box, text='Выбрать папку с программами…',
-                   command=self._choose_dir).grid(row=0, column=0, sticky='w')
+        self.btn_choose = ttk.Button(box, text=i18n.t('ui.choose_dir'),
+                                     command=self._choose_dir)
+        self.btn_choose.grid(row=0, column=0, sticky='w')
         ttk.Label(box, textvariable=self.var_dir, font=FONT,
                   foreground=COLOR_MUTED).grid(row=0, column=1, sticky='w', padx=(10, 0))
-        self.btn_reload = ttk.Button(box, text='Перечитать',
+        self.btn_reload = ttk.Button(box, text=i18n.t('ui.reload'),
                                      command=self._reload, state='disabled')
         self.btn_reload.grid(row=0, column=2, sticky='e', padx=(10, 0))
+
+        self.lbl_lang = ttk.Label(box, text=i18n.t('ui.language'), font=FONT)
+        self.lbl_lang.grid(row=0, column=3, sticky='e', padx=(16, 4))
+        self.cmb_lang = ttk.Combobox(
+            box, state='readonly', width=10, font=FONT,
+            values=[i18n.language_name(code) for code in i18n.available()])
+        self.cmb_lang.current(i18n.available().index(i18n.current()))
+        self.cmb_lang.grid(row=0, column=4, sticky='e')
+        self.cmb_lang.bind('<<ComboboxSelected>>', self._change_language)
 
     def _build_controls(self, parent):
         box = ttk.Frame(parent, padding=(0, 10, 0, 6))
         box.grid(row=1, column=0, sticky='ew')
         box.columnconfigure(6, weight=1)
 
-        ttk.Label(box, text='Выполнено программ по №:',
-                  font=FONT_BOLD).grid(row=0, column=0, sticky='w')
+        self.lbl_done = ttk.Label(box, text=i18n.t('ui.done_label'), font=FONT_BOLD)
+        self.lbl_done.grid(row=0, column=0, sticky='w')
         entry = ttk.Entry(box, textvariable=self.var_done, width=7,
                           font=FONT_BIG, justify='center')
         entry.grid(row=0, column=1, sticky='w', padx=(8, 8))
         entry.bind('<Return>', lambda _: self._recalculate())
         self.entry_done = entry
 
-        ttk.Button(box, text='Рассчитать',
-                   command=self._recalculate).grid(row=0, column=2, sticky='w')
+        self.btn_calc = ttk.Button(box, text=i18n.t('ui.calculate'),
+                                   command=self._recalculate)
+        self.btn_calc.grid(row=0, column=2, sticky='w')
 
         ttk.Separator(box, orient='vertical').grid(row=0, column=3, sticky='ns', padx=14)
 
-        ttk.Label(box, text='Показывать:', font=FONT).grid(row=0, column=4, sticky='w')
+        self.lbl_show = ttk.Label(box, text=i18n.t('ui.show'), font=FONT)
+        self.lbl_show.grid(row=0, column=4, sticky='w')
         choices = ttk.Frame(box)
         choices.grid(row=0, column=5, sticky='w', padx=(8, 0))
-        for index, (value, label) in enumerate((
-                (presentation.ONLY_ALL, 'все'),
-                (presentation.ONLY_DONE, 'готовые'),
-                (presentation.ONLY_WORK, 'в работе'))):
-            ttk.Radiobutton(choices, text=label, value=value,
-                            variable=self.var_only).grid(row=0, column=index, padx=(0, 10))
+        self.radios = {}
+        for index, (value, key) in enumerate((
+                (presentation.ONLY_ALL, 'ui.only_all'),
+                (presentation.ONLY_DONE, 'ui.only_done'),
+                (presentation.ONLY_WORK, 'ui.only_work'))):
+            button = ttk.Radiobutton(choices, text=i18n.t(key), value=value,
+                                     variable=self.var_only)
+            button.grid(row=0, column=index, padx=(0, 10))
+            self.radios[key] = button
 
         search_box = ttk.Frame(box)
         search_box.grid(row=0, column=6, sticky='e')
-        ttk.Label(search_box, text='Поиск позиции:', font=FONT).grid(row=0, column=0)
+        self.lbl_search = ttk.Label(search_box, text=i18n.t('ui.search'), font=FONT)
+        self.lbl_search.grid(row=0, column=0)
         ttk.Entry(search_box, textvariable=self.var_search, width=18,
                   font=FONT).grid(row=0, column=1, padx=(8, 0))
 
@@ -155,13 +171,13 @@ class CounterApp(object):
         box.columnconfigure(0, weight=1)
         box.rowconfigure(0, weight=1)
 
-        self.tree = ttk.Treeview(box, columns=presentation.COLUMNS,
+        self.tree = ttk.Treeview(box, columns=presentation.COLUMN_KEYS,
                                  show='headings', selectmode='browse')
-        for index, name in enumerate(presentation.COLUMNS):
-            self.tree.heading(name, text=name)
-            self.tree.column(name, width=COLUMN_WIDTHS[index],
+        for index, key in enumerate(presentation.COLUMN_KEYS):
+            self.tree.column(key, width=COLUMN_WIDTHS[index],
                              anchor=COLUMN_ANCHORS[index],
                              stretch=(index == 0))
+        self._apply_headings()
         self.tree.tag_configure('done', background=COLOR_DONE_BG,
                                 foreground=COLOR_DONE_FG)
         self.tree.grid(row=0, column=0, sticky='nsew')
@@ -183,23 +199,72 @@ class CounterApp(object):
 
         buttons = ttk.Frame(box)
         buttons.grid(row=0, column=1, rowspan=2, sticky='e')
-        self.btn_warnings = ttk.Button(buttons, text='Замечания',
+        self.btn_warnings = ttk.Button(buttons, text=i18n.t('ui.warnings'),
                                        command=self._show_warnings, state='disabled')
         self.btn_warnings.grid(row=0, column=0, padx=(0, 8))
-        self.btn_export = ttk.Button(buttons, text='Выгрузить в CSV…',
+        self.btn_export = ttk.Button(buttons, text=i18n.t('ui.export'),
                                      command=self._export, state='disabled')
         self.btn_export.grid(row=0, column=1)
 
-        ttk.Label(parent, font=FONT, foreground=COLOR_MUTED,
-                  text='Режим «только чтение»: файлы программ не изменяются, '
-                       'стойка станка не затрагивается.'
-                  ).grid(row=4, column=0, sticky='w', pady=(8, 0))
+        self.lbl_readonly = ttk.Label(parent, font=FONT, foreground=COLOR_MUTED,
+                                      text=i18n.t('app.readonly'), wraplength=700)
+        self.lbl_readonly.grid(row=4, column=0, sticky='w', pady=(8, 0))
+
+    # --- язык ---
+
+    def _apply_headings(self) -> None:
+        for key, title in zip(presentation.COLUMN_KEYS, presentation.columns()):
+            self.tree.heading(key, text=title)
+
+    def _change_language(self, _event=None) -> None:
+        code = i18n.available()[self.cmb_lang.current()]
+        if code == i18n.current():
+            return
+        i18n.set_language(code)
+        self._retranslate()
+
+    def _retranslate(self) -> None:
+        """Переписать все подписи на текущем языке.
+
+        Замечания и расхождения хранятся ключами, а не готовыми строками,
+        поэтому перечитывать файлы не нужно — достаточно перерисовать.
+        """
+        self.master.title(i18n.t('app.title'))
+        self.box_shift.configure(text=i18n.t('ui.shift'))
+        self.btn_choose.configure(text=i18n.t('ui.choose_dir'))
+        self.btn_reload.configure(text=i18n.t('ui.reload'))
+        self.lbl_lang.configure(text=i18n.t('ui.language'))
+        self.lbl_done.configure(text=i18n.t('ui.done_label'))
+        self.btn_calc.configure(text=i18n.t('ui.calculate'))
+        self.lbl_show.configure(text=i18n.t('ui.show'))
+        for key, button in self.radios.items():
+            button.configure(text=i18n.t(key))
+        self.lbl_search.configure(text=i18n.t('ui.search'))
+        self.btn_export.configure(text=i18n.t('ui.export'))
+        self.lbl_readonly.configure(text=i18n.t('app.readonly'))
+        self.cmb_lang.configure(
+            values=[i18n.language_name(code) for code in i18n.available()])
+        self.cmb_lang.current(i18n.available().index(i18n.current()))
+
+        self._apply_headings()
+
+        if self.summary is None:
+            self.var_dir.set(i18n.t('ui.no_dir'))
+            self.var_counters.set(i18n.t('counters.empty'))
+            self.btn_warnings.configure(text=i18n.t('ui.warnings'))
+            return
+
+        self.btn_warnings.configure(
+            text=i18n.t('ui.warnings_n', count=len(self.summary.warnings))
+            if self.summary.warnings else i18n.t('ui.warnings'))
+        self._show_cross_check()
+        self._refresh_table()
 
     # --- действия ---
 
     def _choose_dir(self):
         chosen = filedialog.askdirectory(
-            title='Папка с управляющими программами',
+            title=i18n.t('dlg.choose_dir'),
             initialdir=self.directory or os.path.expanduser('~'))
         if chosen:
             self._load(chosen)
@@ -212,14 +277,16 @@ class CounterApp(object):
         try:
             summary = balance.load_shift(directory, DEFAULT_SYNTAX)
         except (NotADirectoryError, OSError) as exc:
-            messagebox.showerror(TITLE, 'Не удалось прочитать папку.\n\n{}'.format(exc))
+            messagebox.showerror(i18n.t('app.title'),
+                                 i18n.t('dlg.read_failed', error=exc))
             return
 
         if not summary.parts:
             messagebox.showwarning(
-                TITLE,
-                'В папке нет пригодных программ.\n\n{}'.format(
-                    '\n'.join(summary.warnings) or 'Файлы управляющих программ не найдены.'))
+                i18n.t('app.title'),
+                i18n.t('dlg.no_programs',
+                       details='\n'.join(str(w) for w in summary.warnings)
+                       or i18n.t('dlg.no_programs_plain')))
             return
 
         self.directory = directory
@@ -231,8 +298,8 @@ class CounterApp(object):
         self.btn_export.configure(state='normal')
         self.btn_warnings.configure(
             state='normal' if summary.warnings else 'disabled',
-            text='Замечания ({})'.format(len(summary.warnings)) if summary.warnings
-            else 'Замечания')
+            text=i18n.t('ui.warnings_n', count=len(summary.warnings))
+            if summary.warnings else i18n.t('ui.warnings'))
 
         self._show_cross_check()
         self._recalculate()
@@ -245,9 +312,7 @@ class CounterApp(object):
         try:
             return int(text)
         except ValueError:
-            messagebox.showwarning(
-                TITLE, 'Номер выполненной программы вводится числом.\n\n'
-                       'Пустое поле — смена ещё не начата.')
+            messagebox.showwarning(i18n.t('app.title'), i18n.t('dlg.not_a_number'))
             return None
 
     def _recalculate(self):
@@ -257,9 +322,8 @@ class CounterApp(object):
         if done is not None and self.summary.program_numbers:
             last = max(self.summary.program_numbers)
             if done > last:
-                messagebox.showinfo(
-                    TITLE, 'В задании {} программ. Показано как полностью '
-                           'отработанная смена.'.format(last))
+                messagebox.showinfo(i18n.t('app.title'),
+                                    i18n.t('dlg.beyond_shift', last=last))
         self.statuses = balance.status_at(self.summary, done)
         self._refresh_table()
 
@@ -276,6 +340,9 @@ class CounterApp(object):
                              tags=('done',) if status.is_complete else ())
 
         self.var_counters.set(presentation.counters(self.summary, self.statuses))
+        if not shown:
+            self.tree.insert('', 'end',
+                             values=(i18n.t('table.empty'), '', '', '', ''))
 
     def _show_cross_check(self):
         text = presentation.cross_check_line(self.check)
@@ -292,8 +359,9 @@ class CounterApp(object):
         if not self.summary or not self.summary.warnings:
             return
         messagebox.showwarning(
-            TITLE, 'Замечания при разборе файлов:\n\n{}'.format(
-                '\n'.join('• ' + w for w in self.summary.warnings)))
+            i18n.t('app.title'),
+            i18n.t('dlg.warnings',
+                   items='\n'.join('• ' + str(w) for w in self.summary.warnings)))
 
     def _export(self):
         if self.summary is None:
@@ -301,25 +369,35 @@ class CounterApp(object):
         shown = presentation.filter_statuses(
             self.statuses, self.var_only.get(), self.var_search.get())
         if not shown:
-            messagebox.showinfo(TITLE, 'Выгружать нечего: список пуст.')
+            messagebox.showinfo(i18n.t('app.title'), i18n.t('dlg.nothing_to_export'))
             return
         path = filedialog.asksaveasfilename(
-            title='Сохранить выгрузку',
+            title=i18n.t('dlg.save_as'),
             defaultextension='.csv',
-            initialfile='готовность.csv',
-            filetypes=[('Таблица CSV', '*.csv'), ('Все файлы', '*.*')])
+            initialfile=i18n.t('dlg.default_name'),
+            filetypes=[(i18n.t('dlg.csv_files'), '*.csv'),
+                       (i18n.t('dlg.all_files'), '*.*')])
         if not path:
             return
         try:
             presentation.write_csv(path, shown, self._done_number())
         except OSError as exc:
-            messagebox.showerror(TITLE, 'Не удалось сохранить файл.\n\n{}'.format(exc))
+            messagebox.showerror(i18n.t('app.title'),
+                                 i18n.t('dlg.save_failed', error=exc))
             return
-        messagebox.showinfo(TITLE, 'Сохранено:\n{}'.format(path))
+        messagebox.showinfo(i18n.t('app.title'), i18n.t('dlg.saved', path=path))
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+
+    language = None
+    for item in list(argv):
+        if item.startswith('--lang='):
+            language = item.split('=', 1)[1]
+            argv.remove(item)
+    i18n.set_language(language or i18n.detect())
+
     start_dir = argv[0] if argv and os.path.isdir(argv[0]) else None
 
     _enable_dpi_awareness()

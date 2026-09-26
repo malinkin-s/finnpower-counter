@@ -14,6 +14,7 @@
 import os
 from typing import List, Optional, Tuple
 
+from .. import i18n
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
 
 # Символы, ожидаемые в файле станка: латиница, цифры, знаки препинания,
@@ -70,7 +71,7 @@ def decode(raw: bytes, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Tuple[str, str
             break
 
     if not candidates:  # pragma: no cover - недостижимо, пока в списке есть latin-1
-        raise ValueError('не удалось прочитать файл: {}'.format(last_error))
+        raise ValueError(i18n.t('error.unreadable', details=last_error))
 
     candidates.sort()
     _, _, encoding, text = candidates[0]
