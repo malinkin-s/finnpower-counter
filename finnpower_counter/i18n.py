@@ -35,10 +35,20 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'col.last_program': 'Last program',
         'col.produced': 'Made so far',
         'col.status': 'Status',
+        'col.program': 'Program',
+        'col.sheet_size': 'Sheet size',
+        'col.sheets': 'Sheets',
+        'col.positions': 'Positions',
+        'col.pieces': 'Pieces',
+        'col.per_sheet': 'Per sheet',
+        'col.in_program': 'In this program',
+        'col.cumulative': 'Cumulative',
 
         # --- статусы ---
         'status.done': 'Done',
         'status.in_work': 'In progress',
+        'status.executed': 'Executed',
+        'status.pending': 'Pending',
 
         # --- итоги ---
         'counters': ('Programs: {programs}    Parts: {parts}    Pieces: {pieces}    '
@@ -59,6 +69,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         # --- расхождения ---
         'mismatch.sheets': '{program}: {mine} sheets in program, {theirs} in report',
         'mismatch.part': '{program}: {part} — {mine} in program, {theirs} in {section}',
+        'mismatch.sheet_size': '{program}: sheet {mine} in program, {theirs} in report',
 
         # --- замечания при разборе ---
         'warn.no_sheet_count': 'no SHEET_COUNT declaration — quantity unknown',
@@ -87,6 +98,22 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.warnings_n': 'Notes ({count})',
         'ui.export': 'Export to CSV…',
         'ui.language': 'Language:',
+        'ui.mode': 'View:',
+        'ui.mode_parts': 'by part',
+        'ui.mode_programs': 'by program',
+        'ui.search_parts': 'Find part:',
+        'ui.search_programs': 'Find program:',
+        'ui.hint_parts': 'Double-click a part to see its programs.',
+        'ui.hint_programs': 'Double-click a program to open its setup report.',
+
+        # --- окно позиции ---
+        'detail.title': '{part} — {total} pcs, last program {last}',
+        'detail.summary': 'Total {total} pcs in {count} programs, closes at {last}',
+        'detail.close': 'Close',
+
+        # --- карта наладки ---
+        'doc.missing': 'No setup report found next to program {program}.',
+        'doc.failed': 'Could not open the setup report.\n\n{error}',
 
         # --- диалоги ---
         'dlg.choose_dir': 'Folder with NC programs',
@@ -116,7 +143,8 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'cli.help.done': ('number of the last completed program; '
                           'without it the shift counts as not started'),
         'cli.help.search': 'show only parts containing this text',
-        'cli.help.only': 'which parts to show (default: all)',
+        'cli.help.only': 'which rows to show (default: all)',
+        'cli.help.mode': 'list parts or programs (default: parts)',
         'cli.help.validate': 'cross-check parsing against .fms setup reports',
         'cli.help.json': 'output JSON instead of a table',
         'cli.help.lang': 'interface language ({choices})',
@@ -141,9 +169,19 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'col.last_program': 'Крайняя УП',
         'col.produced': 'Готово сейчас',
         'col.status': 'Статус',
+        'col.program': 'Программа',
+        'col.sheet_size': 'Размер листа',
+        'col.sheets': 'Листов',
+        'col.positions': 'Позиций',
+        'col.pieces': 'Деталей',
+        'col.per_sheet': 'На листе',
+        'col.in_program': 'В этой УП',
+        'col.cumulative': 'Накоплено',
 
         'status.done': 'Готово',
         'status.in_work': 'В работе',
+        'status.executed': 'Выполнена',
+        'status.pending': 'Не выполнена',
 
         'counters': ('Программ: {programs}    Позиций: {parts}    Деталей: {pieces}    '
                      'Готово полностью: {done} из {total}'),
@@ -161,6 +199,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
 
         'mismatch.sheets': '{program}: листов в программе {mine}, в отчёте {theirs}',
         'mismatch.part': '{program}: {part} — в программе {mine}, в {section} {theirs}',
+        'mismatch.sheet_size': '{program}: лист {mine} в программе, {theirs} в отчёте',
 
         'warn.no_sheet_count': 'не найдено объявление SHEET_COUNT — тираж неизвестен',
         'warn.zero_sheets': 'SHEET_COUNT=0 — программа не даёт деталей',
@@ -187,6 +226,20 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.warnings_n': 'Замечания ({count})',
         'ui.export': 'Выгрузить в CSV…',
         'ui.language': 'Язык:',
+        'ui.mode': 'Показ:',
+        'ui.mode_parts': 'по деталям',
+        'ui.mode_programs': 'по программам',
+        'ui.search_parts': 'Поиск позиции:',
+        'ui.search_programs': 'Поиск программы:',
+        'ui.hint_parts': 'Двойной щелчок по детали — программы, в которых она есть.',
+        'ui.hint_programs': 'Двойной щелчок по программе — открыть карту наладки.',
+
+        'detail.title': '{part} — {total} шт, крайняя УП {last}',
+        'detail.summary': 'Всего {total} шт в {count} программах, закрывается на {last}',
+        'detail.close': 'Закрыть',
+
+        'doc.missing': 'Рядом с программой {program} карты наладки нет.',
+        'doc.failed': 'Не удалось открыть карту наладки.\n\n{error}',
 
         'dlg.choose_dir': 'Папка с управляющими программами',
         'dlg.read_failed': 'Не удалось прочитать папку.\n\n{error}',
@@ -213,7 +266,8 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'cli.help.done': ('номер последней выполненной программы; '
                           'без него смена считается не начатой'),
         'cli.help.search': 'показать только позиции, содержащие текст',
-        'cli.help.only': 'какие позиции показывать (по умолчанию all)',
+        'cli.help.only': 'какие строки показывать (по умолчанию all)',
+        'cli.help.mode': 'список позиций или программ (по умолчанию parts)',
         'cli.help.validate': 'сверить разбор с отчётами наладки .fms',
         'cli.help.json': 'вывод в JSON вместо таблицы',
         'cli.help.lang': 'язык интерфейса ({choices})',

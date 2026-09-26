@@ -43,6 +43,10 @@ def parse_text(text: str,
     else:
         sheet_count = int(match.group(1))
 
+    def dimension(pattern) -> Optional[float]:
+        found = pattern.search(text)
+        return float(found.group(1)) if found else None
+
     parts: Dict[str, int] = {}
     rscut = _section(text, FMS_SECTIONS['rscut'])
     for part, qty in syntax.fms_rscut_part.findall(rscut):
@@ -58,6 +62,8 @@ def parse_text(text: str,
         name=name,
         path=path,
         sheet_count=sheet_count,
+        sheet_x=dimension(syntax.fms_sheet_x),
+        sheet_y=dimension(syntax.fms_sheet_y),
         parts_per_sheet=parts,
         warnings=warnings,
     )
@@ -85,9 +91,13 @@ def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest
 
 def find_report(nc_path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Optional[str]:
     """Найти отчёт наладки рядом с программой."""
-    stem = os.path.splitext(nc_path)[0]
-    for suffix in syntax.fms_suffixes:
-        for candidate in (stem + suffix, stem + suffix.upper()):
-            if os.path.isfile(candidate):
-                return candidate
-    return None
+    return reader.find_sibling(nc_path, syntax.fms_suffixes)
+
+
+def find_document(nc_path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Optional[str]:
+    """Найти карту наладки (PDF) рядом с программой.
+
+    В реальном задании она есть не у всех программ, поэтому отсутствие —
+    обычное дело, а не ошибка.
+    """
+    return reader.find_sibling(nc_path, syntax.document_suffixes)

@@ -88,6 +88,12 @@ def cross_check(programs: List[ProgramNest],
 
         result.checked += 1
 
+        if (nest.sheet_x, nest.sheet_y) != (from_rscut.sheet_x, from_rscut.sheet_y):
+            result.mismatches.append(Note('mismatch.sheet_size', {
+                'program': nest.name,
+                'mine': nest.sheet_size or '—',
+                'theirs': from_rscut.sheet_size or '—'}))
+
         if nest.sheet_count != from_rscut.sheet_count:
             result.mismatches.append(Note('mismatch.sheets', {
                 'program': nest.name,

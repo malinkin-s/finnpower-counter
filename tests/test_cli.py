@@ -162,3 +162,30 @@ def test_замечания_переводятся(edge_dir):
     _, en, _ = run(['--dir', edge_dir, '--done', '1'], lang='en')
     assert 'Замечания при разборе' in ru
     assert 'Notes from parsing' in en
+
+
+def test_режим_программ(shift_dir):
+    from finnpower_counter import presentation as P
+    code, out, _ = run(['--dir', shift_dir, '--done', '5', '--mode', 'programs'])
+    assert code == cli.EXIT_OK
+    for column in P.columns(P.MODE_PROGRAMS):
+        assert column in out
+    assert 'PRG_06' in out and '3000 x 1500' in out
+
+
+def test_режим_деталей_по_умолчанию(shift_dir):
+    _, default, _ = run(['--dir', shift_dir, '--done', '5'])
+    _, parts, _ = run(['--dir', shift_dir, '--done', '5', '--mode', 'parts'])
+    assert default == parts
+
+
+def test_отбор_программ_в_консоли(shift_dir):
+    _, done, _ = run(['--dir', shift_dir, '-n', '5', '-m', 'programs', '--only', 'done'])
+    _, work, _ = run(['--dir', shift_dir, '-n', '5', '-m', 'programs', '--only', 'work'])
+    assert done.count('PRG_') == 5
+    assert work.count('PRG_') == 7
+
+
+def test_поиск_программы_в_консоли(shift_dir):
+    _, out, _ = run(['--dir', shift_dir, '-m', 'programs', '-s', '7'])
+    assert out.count('PRG_') == 1 and 'PRG_07' in out

@@ -2,11 +2,13 @@
 """Окно оператора.
 
 Рабочая версия для цеха. Только чтение: утилита разбирает копии текстовых
-файлов и ничего не пишет ни в программы, ни в стойку станка.
+файлов и ничего не пишет ни в программы, ни в стойку станка. Единственное
+действие наружу — открыть карту наладки той программой, которая назначена
+в системе.
 
-Модуль намеренно тонкий. Отбор, состав колонок и выгрузка живут в
-presentation, расчёт — в core, поэтому проверяются тестами без поднятия окна.
-Здесь остаются только размещение элементов и реакция на действия оператора.
+Модуль намеренно тонкий. Отбор, состав колонок, выравнивание и выгрузка живут
+в presentation, расчёт — в core, поэтому проверяются тестами без поднятия
+окна. Здесь остаются размещение элементов и реакция на действия оператора.
 
 Цель сборки — Windows 7 32-bit, Python 3.8.10: tkinter из стандартной
 библиотеки, никаких внешних зависимостей.
@@ -16,11 +18,11 @@ import os
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from . import i18n, presentation
-from .core import balance
-from .core.model import PartStatus, ShiftSummary
+from . import i18n, presentation, system
+from .core import balance, fms_parser
+from .core.model import PartStatus, PartTotal, ShiftSummary
 from .core.syntax import DEFAULT_SYNTAX
 
 # Экран у стойки смотрят стоя и не вплотную — шрифт крупнее обычного.
@@ -35,11 +37,22 @@ COLOR_WARN = '#8a4b00'
 COLOR_ERROR = '#8a1c1c'
 COLOR_MUTED = '#555555'
 
-COLUMN_WIDTHS = (170, 120, 100, 120, 100)
-COLUMN_ANCHORS = ('w', 'e', 'e', 'e', 'center')
+# Ширины колонок по режимам, в пикселях при 96 DPI.
+COLUMN_WIDTHS = {
+    presentation.MODE_PARTS: (180, 120, 100, 120, 110),
+    presentation.MODE_PROGRAMS: (120, 130, 80, 90, 90, 120),
+}
+DETAIL_WIDTHS = (120, 80, 90, 100, 110)
+
+ANCHORS = {'l': 'w', 'r': 'e', 'c': 'center'}
+
+# Обозначения строк таблицы. По ним двойной щелчок понимает, на что нажали.
+ROW_PART = 'part:'
+ROW_PROGRAM = 'prog:'
+ROW_EMPTY = 'empty'
 
 
-def _enable_dpi_awareness():
+def _enable_dpi_awareness() -> None:
     """Чёткий текст при масштабировании экрана.
 
     На Windows 8.1 и новее есть shcore, на Windows 7 — только user32.
@@ -58,6 +71,92 @@ def _enable_dpi_awareness():
             continue
 
 
+def _configure_tree(tree: ttk.Treeview, keys, titles, widths, align) -> None:
+    """Переназначить колонки таблицы. Нужно при смене режима и языка."""
+    tree.configure(columns=list(keys))
+    for index, key in enumerate(keys):
+        tree.heading(key, text=titles[index])
+        tree.column(key,
+                    width=widths[index],
+                    anchor=ANCHORS.get(align[index], 'w'),
+                    stretch=(index == 0))
+
+
+class PartWindow(object):
+    """Отдельное окно одной позиции: в каких программах и по сколько.
+
+    Немодальное: оператор держит его открытым, пока работает с таблицей,
+    и может открыть сразу несколько.
+    """
+
+    def __init__(self, master: tk.Misc, part: PartTotal,
+                 summary: ShiftSummary, on_close) -> None:
+        self.part = part
+        self.summary = summary
+        self._on_close = on_close
+
+        self.top = tk.Toplevel(master)
+        self.top.minsize(560, 260)
+        self.top.protocol('WM_DELETE_WINDOW', self.close)
+
+        frame = ttk.Frame(self.top, padding=10)
+        frame.pack(fill='both', expand=True)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(1, weight=1)
+
+        self.lbl_summary = ttk.Label(frame, font=FONT_BOLD)
+        self.lbl_summary.grid(row=0, column=0, sticky='w', pady=(0, 8))
+
+        table = ttk.Frame(frame)
+        table.grid(row=1, column=0, sticky='nsew')
+        table.columnconfigure(0, weight=1)
+        table.rowconfigure(0, weight=1)
+
+        self.tree = ttk.Treeview(table, show='headings', selectmode='browse',
+                                 height=min(12, max(3, len(part.by_program))))
+        self.tree.grid(row=0, column=0, sticky='nsew')
+        bar = ttk.Scrollbar(table, orient='vertical', command=self.tree.yview)
+        bar.grid(row=0, column=1, sticky='ns')
+        self.tree.configure(yscrollcommand=bar.set)
+
+        self.btn_close = ttk.Button(frame, command=self.close)
+        self.btn_close.grid(row=2, column=0, sticky='e', pady=(10, 0))
+
+        self.retranslate()
+
+    def retranslate(self) -> None:
+        self.top.title(i18n.t('detail.title',
+                              part=self.part.part,
+                              total=self.part.total,
+                              last=self.part.last_program))
+        self.lbl_summary.configure(text=i18n.t(
+            'detail.summary',
+            total=self.part.total,
+            count=len(self.part.by_program),
+            last=self.part.last_program))
+        self.btn_close.configure(text=i18n.t('detail.close'))
+        _configure_tree(self.tree,
+                        presentation.DETAIL_COLUMN_KEYS,
+                        presentation.detail_columns(),
+                        DETAIL_WIDTHS,
+                        presentation.DETAIL_ALIGN)
+        self.refresh()
+
+    def refresh(self) -> None:
+        self.tree.delete(*self.tree.get_children())
+        for row in presentation.part_detail_rows(self.part, self.summary.programs):
+            self.tree.insert('', 'end', values=row)
+
+    def focus(self) -> None:
+        self.top.deiconify()
+        self.top.lift()
+        self.top.focus_force()
+
+    def close(self) -> None:
+        self._on_close(self.part.part)
+        self.top.destroy()
+
+
 class CounterApp(object):
     """Окно: выбор папки, ввод выполненной программы, таблица готовности."""
 
@@ -67,51 +166,56 @@ class CounterApp(object):
         self.statuses: List[PartStatus] = []
         self.check = None
         self.directory: Optional[str] = None
+        self.detail_windows: Dict[str, PartWindow] = {}
 
         self.var_dir = tk.StringVar(value=i18n.t('ui.no_dir'))
         self.var_done = tk.StringVar()
         self.var_search = tk.StringVar()
         self.var_only = tk.StringVar(value=presentation.ONLY_ALL)
+        self.var_mode = tk.StringVar(value=presentation.MODE_PARTS)
         self.var_counters = tk.StringVar(value=i18n.t('counters.empty'))
         self.var_lang = tk.StringVar(value=i18n.current())
         self.var_check = tk.StringVar(value='')
+        self.var_hint = tk.StringVar(value='')
 
         self._build()
         # trace_add, а не устаревший trace: последний удалён в Python 3.13,
         # а исходник собирают не только под целевой 3.8.
         self.var_search.trace_add('write', lambda *_: self._refresh_table())
         self.var_only.trace_add('write', lambda *_: self._refresh_table())
+        self.var_mode.trace_add('write', lambda *_: self._change_mode())
 
+        self._change_mode()
         if start_dir:
             self._load(start_dir)
 
     # --- построение окна ---
 
-    def _build(self):
+    def _build(self) -> None:
         self.master.title(i18n.t('app.title'))
-        self.master.minsize(760, 480)
+        self.master.minsize(860, 520)
         root = ttk.Frame(self.master, padding=10)
         root.pack(fill='both', expand=True)
         root.columnconfigure(0, weight=1)
         root.rowconfigure(2, weight=1)
 
-        root.grid_rowconfigure(2, weight=1)
         self._build_source(root)
         self._build_controls(root)
         self._build_table(root)
         self._build_footer(root)
 
-    def _build_source(self, parent):
+    def _build_source(self, parent: tk.Misc) -> None:
         box = ttk.LabelFrame(parent, text=i18n.t('ui.shift'), padding=8)
-        self.box_shift = box
         box.grid(row=0, column=0, sticky='ew')
         box.columnconfigure(1, weight=1)
+        self.box_shift = box
 
         self.btn_choose = ttk.Button(box, text=i18n.t('ui.choose_dir'),
                                      command=self._choose_dir)
         self.btn_choose.grid(row=0, column=0, sticky='w')
         ttk.Label(box, textvariable=self.var_dir, font=FONT,
-                  foreground=COLOR_MUTED).grid(row=0, column=1, sticky='w', padx=(10, 0))
+                  foreground=COLOR_MUTED).grid(row=0, column=1, sticky='w',
+                                               padx=(10, 0))
         self.btn_reload = ttk.Button(box, text=i18n.t('ui.reload'),
                                      command=self._reload, state='disabled')
         self.btn_reload.grid(row=0, column=2, sticky='e', padx=(10, 0))
@@ -125,10 +229,10 @@ class CounterApp(object):
         self.cmb_lang.grid(row=0, column=4, sticky='e')
         self.cmb_lang.bind('<<ComboboxSelected>>', self._change_language)
 
-    def _build_controls(self, parent):
+    def _build_controls(self, parent: tk.Misc) -> None:
         box = ttk.Frame(parent, padding=(0, 10, 0, 6))
         box.grid(row=1, column=0, sticky='ew')
-        box.columnconfigure(6, weight=1)
+        box.columnconfigure(8, weight=1)
 
         self.lbl_done = ttk.Label(box, text=i18n.t('ui.done_label'), font=FONT_BOLD)
         self.lbl_done.grid(row=0, column=0, sticky='w')
@@ -142,12 +246,29 @@ class CounterApp(object):
                                    command=self._recalculate)
         self.btn_calc.grid(row=0, column=2, sticky='w')
 
-        ttk.Separator(box, orient='vertical').grid(row=0, column=3, sticky='ns', padx=14)
+        ttk.Separator(box, orient='vertical').grid(row=0, column=3,
+                                                   sticky='ns', padx=14)
+
+        self.lbl_mode = ttk.Label(box, text=i18n.t('ui.mode'), font=FONT)
+        self.lbl_mode.grid(row=0, column=4, sticky='w')
+        modes = ttk.Frame(box)
+        modes.grid(row=0, column=5, sticky='w', padx=(8, 0))
+        self.mode_buttons = {}
+        for index, (value, key) in enumerate((
+                (presentation.MODE_PARTS, 'ui.mode_parts'),
+                (presentation.MODE_PROGRAMS, 'ui.mode_programs'))):
+            button = ttk.Radiobutton(modes, text=i18n.t(key), value=value,
+                                     variable=self.var_mode)
+            button.grid(row=0, column=index, padx=(0, 10))
+            self.mode_buttons[key] = button
+
+        ttk.Separator(box, orient='vertical').grid(row=0, column=6,
+                                                   sticky='ns', padx=14)
 
         self.lbl_show = ttk.Label(box, text=i18n.t('ui.show'), font=FONT)
-        self.lbl_show.grid(row=0, column=4, sticky='w')
+        self.lbl_show.grid(row=0, column=7, sticky='w')
         choices = ttk.Frame(box)
-        choices.grid(row=0, column=5, sticky='w', padx=(8, 0))
+        choices.grid(row=0, column=8, sticky='w', padx=(8, 0))
         self.radios = {}
         for index, (value, key) in enumerate((
                 (presentation.ONLY_ALL, 'ui.only_all'),
@@ -159,62 +280,84 @@ class CounterApp(object):
             self.radios[key] = button
 
         search_box = ttk.Frame(box)
-        search_box.grid(row=0, column=6, sticky='e')
-        self.lbl_search = ttk.Label(search_box, text=i18n.t('ui.search'), font=FONT)
+        search_box.grid(row=0, column=9, sticky='e')
+        self.lbl_search = ttk.Label(search_box, text=i18n.t('ui.search_parts'),
+                                    font=FONT)
         self.lbl_search.grid(row=0, column=0)
         ttk.Entry(search_box, textvariable=self.var_search, width=18,
                   font=FONT).grid(row=0, column=1, padx=(8, 0))
 
-    def _build_table(self, parent):
+    def _build_table(self, parent: tk.Misc) -> None:
         box = ttk.Frame(parent)
         box.grid(row=2, column=0, sticky='nsew')
         box.columnconfigure(0, weight=1)
         box.rowconfigure(0, weight=1)
 
-        self.tree = ttk.Treeview(box, columns=presentation.COLUMN_KEYS,
-                                 show='headings', selectmode='browse')
-        for index, key in enumerate(presentation.COLUMN_KEYS):
-            self.tree.column(key, width=COLUMN_WIDTHS[index],
-                             anchor=COLUMN_ANCHORS[index],
-                             stretch=(index == 0))
-        self._apply_headings()
+        self.tree = ttk.Treeview(box, show='headings', selectmode='browse')
         self.tree.tag_configure('done', background=COLOR_DONE_BG,
                                 foreground=COLOR_DONE_FG)
+        self.tree.tag_configure('empty', foreground=COLOR_MUTED)
         self.tree.grid(row=0, column=0, sticky='nsew')
+        self.tree.bind('<Double-1>', self._on_double_click)
 
         bar = ttk.Scrollbar(box, orient='vertical', command=self.tree.yview)
         bar.grid(row=0, column=1, sticky='ns')
         self.tree.configure(yscrollcommand=bar.set)
 
-    def _build_footer(self, parent):
+        self.lbl_hint = ttk.Label(parent, textvariable=self.var_hint,
+                                  font=FONT, foreground=COLOR_MUTED)
+        self.lbl_hint.grid(row=3, column=0, sticky='w', pady=(4, 0))
+
+    def _build_footer(self, parent: tk.Misc) -> None:
         box = ttk.Frame(parent, padding=(0, 8, 0, 0))
-        box.grid(row=3, column=0, sticky='ew')
+        box.grid(row=4, column=0, sticky='ew')
         box.columnconfigure(0, weight=1)
 
         ttk.Label(box, textvariable=self.var_counters,
                   font=FONT_BOLD).grid(row=0, column=0, sticky='w')
-
         self.lbl_check = ttk.Label(box, textvariable=self.var_check, font=FONT)
         self.lbl_check.grid(row=1, column=0, sticky='w', pady=(2, 0))
 
         buttons = ttk.Frame(box)
         buttons.grid(row=0, column=1, rowspan=2, sticky='e')
         self.btn_warnings = ttk.Button(buttons, text=i18n.t('ui.warnings'),
-                                       command=self._show_warnings, state='disabled')
+                                       command=self._show_warnings,
+                                       state='disabled')
         self.btn_warnings.grid(row=0, column=0, padx=(0, 8))
         self.btn_export = ttk.Button(buttons, text=i18n.t('ui.export'),
                                      command=self._export, state='disabled')
         self.btn_export.grid(row=0, column=1)
 
         self.lbl_readonly = ttk.Label(parent, font=FONT, foreground=COLOR_MUTED,
-                                      text=i18n.t('app.readonly'), wraplength=700)
-        self.lbl_readonly.grid(row=4, column=0, sticky='w', pady=(8, 0))
+                                      text=i18n.t('app.readonly'), wraplength=800)
+        self.lbl_readonly.grid(row=5, column=0, sticky='w', pady=(8, 0))
+
+    # --- режим показа ---
+
+    @property
+    def mode(self) -> str:
+        return self.var_mode.get()
+
+    def _change_mode(self, *_args) -> None:
+        """Переключить режим: другие колонки, другая подпись поиска.
+
+        Строка поиска намеренно не очищается — если оператор ищет PRG_07,
+        а потом переключается на детали, он сам решит, что делать с текстом.
+        """
+        mode = self.mode
+        by_programs = mode == presentation.MODE_PROGRAMS
+        self.lbl_search.configure(
+            text=i18n.t('ui.search_programs' if by_programs else 'ui.search_parts'))
+        self.var_hint.set(
+            i18n.t('ui.hint_programs' if by_programs else 'ui.hint_parts'))
+        _configure_tree(self.tree,
+                        presentation.column_keys(mode),
+                        presentation.columns(mode),
+                        COLUMN_WIDTHS[mode],
+                        presentation.align(mode))
+        self._refresh_table()
 
     # --- язык ---
-
-    def _apply_headings(self) -> None:
-        for key, title in zip(presentation.COLUMN_KEYS, presentation.columns()):
-            self.tree.heading(key, text=title)
 
     def _change_language(self, _event=None) -> None:
         code = i18n.available()[self.cmb_lang.current()]
@@ -236,40 +379,44 @@ class CounterApp(object):
         self.lbl_lang.configure(text=i18n.t('ui.language'))
         self.lbl_done.configure(text=i18n.t('ui.done_label'))
         self.btn_calc.configure(text=i18n.t('ui.calculate'))
+        self.lbl_mode.configure(text=i18n.t('ui.mode'))
+        for key, button in self.mode_buttons.items():
+            button.configure(text=i18n.t(key))
         self.lbl_show.configure(text=i18n.t('ui.show'))
         for key, button in self.radios.items():
             button.configure(text=i18n.t(key))
-        self.lbl_search.configure(text=i18n.t('ui.search'))
         self.btn_export.configure(text=i18n.t('ui.export'))
         self.lbl_readonly.configure(text=i18n.t('app.readonly'))
         self.cmb_lang.configure(
             values=[i18n.language_name(code) for code in i18n.available()])
         self.cmb_lang.current(i18n.available().index(i18n.current()))
 
-        self._apply_headings()
+        for window in list(self.detail_windows.values()):
+            window.retranslate()
 
         if self.summary is None:
             self.var_dir.set(i18n.t('ui.no_dir'))
             self.var_counters.set(i18n.t('counters.empty'))
             self.btn_warnings.configure(text=i18n.t('ui.warnings'))
+            self._change_mode()
             return
 
         self.btn_warnings.configure(
             text=i18n.t('ui.warnings_n', count=len(self.summary.warnings))
             if self.summary.warnings else i18n.t('ui.warnings'))
         self._show_cross_check()
-        self._refresh_table()
+        self._change_mode()
 
     # --- действия ---
 
-    def _choose_dir(self):
+    def _choose_dir(self) -> None:
         chosen = filedialog.askdirectory(
             title=i18n.t('dlg.choose_dir'),
             initialdir=self.directory or os.path.expanduser('~'))
         if chosen:
             self._load(chosen)
 
-    def _reload(self):
+    def _reload(self) -> None:
         if self.directory:
             self._load(self.directory)
 
@@ -288,6 +435,9 @@ class CounterApp(object):
                        details='\n'.join(str(w) for w in summary.warnings)
                        or i18n.t('dlg.no_programs_plain')))
             return
+
+        # Открытые окна позиций относятся к прежнему заданию.
+        self._close_detail_windows()
 
         self.directory = directory
         self.summary = summary
@@ -315,7 +465,7 @@ class CounterApp(object):
             messagebox.showwarning(i18n.t('app.title'), i18n.t('dlg.not_a_number'))
             return None
 
-    def _recalculate(self):
+    def _recalculate(self) -> None:
         if self.summary is None:
             return
         done = self._done_number()
@@ -327,26 +477,104 @@ class CounterApp(object):
         self.statuses = balance.status_at(self.summary, done)
         self._refresh_table()
 
-    def _refresh_table(self):
+    def _refresh_table(self) -> None:
         if self.summary is None:
             return
-        shown = presentation.filter_statuses(
-            self.statuses, self.var_only.get(), self.var_search.get())
-
         self.tree.delete(*self.tree.get_children())
-        for status in shown:
-            self.tree.insert('', 'end',
-                             values=presentation.row(status),
-                             tags=('done',) if status.is_complete else ())
+
+        if self.mode == presentation.MODE_PROGRAMS:
+            done = self._current_done()
+            shown = presentation.filter_programs(
+                self.summary.usable_programs, self.var_only.get(),
+                self.var_search.get(), done)
+            for nest in shown:
+                executed = done is not None and nest.number <= done
+                self.tree.insert('', 'end', iid=ROW_PROGRAM + nest.name,
+                                 values=presentation.program_row(nest, done),
+                                 tags=('done',) if executed else ())
+            empty = not shown
+        else:
+            shown = presentation.filter_statuses(
+                self.statuses, self.var_only.get(), self.var_search.get())
+            for status in shown:
+                self.tree.insert('', 'end', iid=ROW_PART + status.part,
+                                 values=presentation.row(status),
+                                 tags=('done',) if status.is_complete else ())
+            empty = not shown
+
+        if empty:
+            columns = len(presentation.column_keys(self.mode))
+            self.tree.insert('', 'end', iid=ROW_EMPTY, tags=('empty',),
+                             values=[i18n.t('table.empty')] + [''] * (columns - 1))
 
         self.var_counters.set(presentation.counters(self.summary, self.statuses))
-        if not shown:
-            self.tree.insert('', 'end',
-                             values=(i18n.t('table.empty'), '', '', '', ''))
 
-    def _show_cross_check(self):
-        text = presentation.cross_check_line(self.check)
-        self.var_check.set(text)
+    def _current_done(self) -> Optional[int]:
+        """Номер выполненной программы без жалоб на ввод.
+
+        Таблица перерисовывается на каждое нажатие в поиске, и ругаться
+        на недописанное число в такие моменты нельзя.
+        """
+        text = self.var_done.get().strip()
+        try:
+            return int(text) if text else None
+        except ValueError:
+            return None
+
+    # --- двойной щелчок ---
+
+    def _on_double_click(self, _event=None) -> None:
+        item = self.tree.focus()
+        if not item or item == ROW_EMPTY:
+            return
+        if item.startswith(ROW_PROGRAM):
+            self._open_document(item[len(ROW_PROGRAM):])
+        elif item.startswith(ROW_PART):
+            self._open_part(item[len(ROW_PART):])
+
+    def _open_document(self, program_name: str) -> None:
+        """Открыть карту наладки программы системным приложением."""
+        if self.summary is None:
+            return
+        nest = next((n for n in self.summary.programs if n.name == program_name), None)
+        if nest is None or not nest.path:
+            return
+        document = fms_parser.find_document(nest.path, DEFAULT_SYNTAX)
+        if document is None:
+            messagebox.showinfo(i18n.t('app.title'),
+                                i18n.t('doc.missing', program=program_name))
+            return
+        error = system.open_document(document)
+        if error:
+            messagebox.showerror(i18n.t('app.title'),
+                                 i18n.t('doc.failed', error=error))
+
+    def _open_part(self, part_name: str) -> None:
+        """Открыть немодальное окно позиции. Повторный щелчок поднимает его."""
+        if self.summary is None:
+            return
+        existing = self.detail_windows.get(part_name)
+        if existing is not None:
+            existing.focus()
+            return
+        part = next((p for p in self.summary.parts if p.part == part_name), None)
+        if part is None:
+            return
+        self.detail_windows[part_name] = PartWindow(
+            self.master, part, self.summary, self._forget_detail_window)
+
+    def _forget_detail_window(self, part_name: str) -> None:
+        self.detail_windows.pop(part_name, None)
+
+    def _close_detail_windows(self) -> None:
+        for window in list(self.detail_windows.values()):
+            window.top.destroy()
+        self.detail_windows.clear()
+
+    # --- подвал ---
+
+    def _show_cross_check(self) -> None:
+        self.var_check.set(presentation.cross_check_line(self.check))
         if self.check is not None and self.check.mismatches:
             colour = COLOR_ERROR
         elif self.check is not None and self.check.checked:
@@ -355,7 +583,7 @@ class CounterApp(object):
             colour = COLOR_WARN
         self.lbl_check.configure(foreground=colour)
 
-    def _show_warnings(self):
+    def _show_warnings(self) -> None:
         if not self.summary or not self.summary.warnings:
             return
         messagebox.showwarning(
@@ -363,11 +591,12 @@ class CounterApp(object):
             i18n.t('dlg.warnings',
                    items='\n'.join('• ' + str(w) for w in self.summary.warnings)))
 
-    def _export(self):
+    def _export(self) -> None:
         if self.summary is None:
             return
         shown = presentation.filter_statuses(
-            self.statuses, self.var_only.get(), self.var_search.get())
+            self.statuses, self.var_only.get(),
+            self.var_search.get() if self.mode == presentation.MODE_PARTS else None)
         if not shown:
             messagebox.showinfo(i18n.t('app.title'), i18n.t('dlg.nothing_to_export'))
             return
@@ -380,7 +609,7 @@ class CounterApp(object):
         if not path:
             return
         try:
-            presentation.write_csv(path, shown, self._done_number())
+            presentation.write_csv(path, shown, self._current_done())
         except OSError as exc:
             messagebox.showerror(i18n.t('app.title'),
                                  i18n.t('dlg.save_failed', error=exc))

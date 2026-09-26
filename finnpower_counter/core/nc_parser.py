@@ -27,6 +27,10 @@ def parse_text(text: str,
         if sheet_count == 0:
             warnings.append(Note('warn.zero_sheets'))
 
+    def dimension(pattern) -> Optional[float]:
+        found = pattern.search(text)
+        return float(found.group(1)) if found else None
+
     parts = {}
     blocks = syntax.part_block.findall(text)
     for index, block in enumerate(blocks, start=1):
@@ -52,6 +56,8 @@ def parse_text(text: str,
         name=name,
         path=path,
         sheet_count=sheet_count,
+        sheet_x=dimension(syntax.sheet_x),
+        sheet_y=dimension(syntax.sheet_y),
         parts_per_sheet=parts,
         warnings=warnings,
     )

@@ -48,6 +48,51 @@ PART_DIMS = {
 
 TOOLS = ['TOOL_NA01', 'TOOL_NA11', 'TOOL_NA20', 'TOOL_NA22', 'TOOL_NA31']
 
+# Габариты листа. В реальном задании их бывает несколько, поэтому в наборе
+# тоже больше одного — иначе колонка размера ничего не проверяет.
+DEFAULT_SHEET = (2500, 1250)
+SHEET_OVERRIDES = {6: (3000, 1500), 10: (600, 415)}
+
+# Программы, у которых карты наладки нет. В реальном задании PDF есть не
+# у всех, и утилита обязана переживать это без ошибки.
+WITHOUT_DOCUMENT = {4, 9}
+
+
+def sheet_size(prg_no):
+    return SHEET_OVERRIDES.get(prg_no, DEFAULT_SHEET)
+
+
+def pdf_bytes(title):
+    """Минимальная корректная одностраничная PDF-заглушка.
+
+    Настоящие карты наладки в репозиторий не выкладываются, но утилита должна
+    находить файл рядом с программой и отдавать его системе.
+    """
+    body = 'BT /F1 18 Tf 72 760 Td ({}) Tj ET'.format(title).encode('ascii')
+    objects = [
+        b'<</Type/Catalog/Pages 2 0 R>>',
+        b'<</Type/Pages/Kids[3 0 R]/Count 1>>',
+        b'<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]'
+        b'/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>',
+        b'<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>',
+        b'<</Length ' + str(len(body)).encode('ascii') + b'>>stream\n'
+        + body + b'\nendstream',
+    ]
+    out = bytearray(b'%PDF-1.4\n')
+    offsets = []
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += str(index).encode('ascii') + b' 0 obj' + obj + b'endobj\n'
+    xref_at = len(out)
+    out += b'xref\n0 ' + str(len(objects) + 1).encode('ascii') + b'\n'
+    out += b'0000000000 65535 f \n'
+    for offset in offsets:
+        out += ('%010d 00000 n \n' % offset).encode('ascii')
+    out += (b'trailer<</Size ' + str(len(objects) + 1).encode('ascii')
+            + b'/Root 1 0 R>>\nstartxref\n'
+            + str(xref_at).encode('ascii') + b'\n%%EOF\n')
+    return bytes(out)
+
 # Сменное задание.
 #   номер УП -> (число листов, [(деталь, штук в блоке), ...], число обрезков)
 # Список блоков намеренно содержит повторы одной детали — так пишет CAM,
@@ -92,6 +137,8 @@ def expected_balance(shift):
             'last_program': last_prg[name],
         })
     return {
+        'sheet_sizes': {str(k): list(sheet_size(k)) for k in sorted(shift)},
+        'without_document': sorted(WITHOUT_DOCUMENT),
         'programs': len(shift),
         'unique_parts': len(totals),
         'total_pieces': sum(totals.values()),
@@ -103,6 +150,7 @@ def expected_balance(shift):
 def nc_text(prg_no, sheets, blocks, scrap, name_fmt='PRG_{:02d}', comment=None):
     """Управляющая программа в формате NCeXpress FMS."""
     prg = name_fmt.format(prg_no)
+    size_x, size_y = sheet_size(prg_no)
     out = [
         '%_N_{}_MPF'.format(prg),
         ';$PATH=/_N_WKS_DIR/_N_WORK_1_WPD',
@@ -118,8 +166,8 @@ def nc_text(prg_no, sheets, blocks, scrap, name_fmt='PRG_{:02d}', comment=None):
         'MATERIAL="Steel"',
         'THICKNESS=2',
         'SCRAP_BOX=1',
-        'X_DIM=2500',
-        'Y_DIM=1250',
+        'X_DIM={}'.format(size_x),
+        'Y_DIM={}'.format(size_y),
         'CLAMP_1=75.250',
         'CLAMP_2=1035.099',
         'CLAMP_3=1994.948',
@@ -196,6 +244,7 @@ def nc_text(prg_no, sheets, blocks, scrap, name_fmt='PRG_{:02d}', comment=None):
 def fms_text(prg_no, sheets, blocks, name_fmt='PRG_{:02d}'):
     """Отчёт наладки: #RSCUT — агрегат по детали, #COMPONENTS — по блокам."""
     prg = name_fmt.format(prg_no)
+    size_x, size_y = sheet_size(prg_no)
     agg = {}
     for name, qty in blocks:
         agg[name] = agg.get(name, 0) + qty
@@ -216,8 +265,8 @@ def fms_text(prg_no, sheets, blocks, name_fmt='PRG_{:02d}'):
         'JOB ID : {}'.format(prg),
         'MATERIAL : Steel',
         'THICKNESS : 2',
-        'SHEET SIZE X : 2500',
-        'SHEET SIZE Y : 1250',
+        'SHEET SIZE X : {}'.format(size_x),
+        'SHEET SIZE Y : {}'.format(size_y),
         'PLATE NAME :PLATE_A',
         'NUMBER OF SHEETS : {}'.format(sheets),
         'NUMBER OF CLAMPS : 3',
@@ -301,6 +350,10 @@ def main():
               nc_text(prg, sheets, blocks, scrap))
         write(os.path.join(shift_dir, 'PRG_{:02d}.fms'.format(prg)),
               fms_text(prg, sheets, blocks))
+        if prg not in WITHOUT_DOCUMENT:
+            with open(os.path.join(shift_dir, 'PRG_{:02d}.pdf'.format(prg)),
+                      'wb') as fh:
+                fh.write(pdf_bytes('SYNTHETIC SETUP REPORT PRG_{:02d}'.format(prg)))
 
     # 2. Та же смена без ведущих нулей: PRG_1..PRG_12.
     #    Ловушка на сортировку: по алфавиту PRG_10 встаёт раньше PRG_9,

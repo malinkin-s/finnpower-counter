@@ -46,6 +46,8 @@ class ProgramNest:
     name: str
     path: str
     sheet_count: Optional[int]
+    sheet_x: Optional[float] = None
+    sheet_y: Optional[float] = None
     parts_per_sheet: Dict[str, int] = dataclasses.field(default_factory=dict)
     warnings: List[Note] = dataclasses.field(default_factory=list)
 
@@ -68,6 +70,20 @@ class ProgramNest:
     @property
     def total_pieces(self) -> int:
         return sum(self.pieces().values())
+
+    @property
+    def unique_parts(self) -> int:
+        return len(self.parts_per_sheet)
+
+    @property
+    def sheet_size(self) -> str:
+        """Габариты листа для показа: «2500 x 1250». Дробная часть убирается,
+        если она нулевая — в файлах размеры обычно целые."""
+        if self.sheet_x is None or self.sheet_y is None:
+            return ''
+        def fmt(value: float) -> str:
+            return str(int(value)) if float(value).is_integer() else str(value)
+        return '{} x {}'.format(fmt(self.sheet_x), fmt(self.sheet_y))
 
 
 @dataclasses.dataclass

@@ -33,9 +33,16 @@ class MachineSyntax:
     part_name: Pattern
     quantity: Pattern
 
+    # Габариты листа. Якорь на начало строки обязателен: в файле есть ещё
+    # UNLOADING_X_DIM и PART_X_DIM, и без якоря подхватится не то.
+    sheet_x: Pattern
+    sheet_y: Pattern
+
     # --- Отчёт наладки (.fms) ---
 
     fms_sheet_count: Pattern
+    fms_sheet_x: Pattern
+    fms_sheet_y: Pattern
     # Секция #RSCUT: одна строка на деталь, количество уже просуммировано.
     fms_rscut_part: Pattern
     # Секция #COMPONENTS: одна строка на блок. Пробелы вокруг "=" здесь
@@ -53,6 +60,8 @@ class MachineSyntax:
 
     nc_suffixes: Tuple[str, ...]
     fms_suffixes: Tuple[str, ...]
+    # Карта наладки, которую оператор открывает двойным щелчком по программе.
+    document_suffixes: Tuple[str, ...]
 
     # Кодировки перебираются по порядку. Последняя должна быть такой, которая
     # не падает ни на каком байте, иначе файл нечем будет прочитать.
@@ -73,7 +82,12 @@ NCEXPRESS_FMS = MachineSyntax(
     part_name=re.compile(r'^[ \t]*PART_NAME[ \t]*=[ \t]*"([^"]*)"', re.MULTILINE),
     quantity=re.compile(r'^[ \t]*QUANTITY[ \t]*=[ \t]*(\d+)', re.MULTILINE),
 
+    sheet_x=re.compile(r'^[ \t]*X_DIM[ \t]*=[ \t]*([\d.]+)', re.MULTILINE),
+    sheet_y=re.compile(r'^[ \t]*Y_DIM[ \t]*=[ \t]*([\d.]+)', re.MULTILINE),
+
     fms_sheet_count=re.compile(r'^NUMBER OF SHEETS[ \t]*:[ \t]*(\d+)', re.MULTILINE),
+    fms_sheet_x=re.compile(r'^SHEET SIZE X[ \t]*:[ \t]*([\d.]+)', re.MULTILINE),
+    fms_sheet_y=re.compile(r'^SHEET SIZE Y[ \t]*:[ \t]*([\d.]+)', re.MULTILINE),
     fms_rscut_part=re.compile(
         r'^(\S+)[ \t]*:[ \t]*Size[ \t]+[\d.]+[ \t]*x[ \t]*[\d.]+,[ \t]*Number=(\d+)',
         re.MULTILINE),
@@ -88,6 +102,7 @@ NCEXPRESS_FMS = MachineSyntax(
 
     nc_suffixes=('.nc',),
     fms_suffixes=('.fms',),
+    document_suffixes=('.pdf',),
 
     encodings=('utf-8', 'utf-8-sig', 'cp1251', 'cp866', 'latin-1'),
 )

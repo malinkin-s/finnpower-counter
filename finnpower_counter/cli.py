@@ -13,7 +13,7 @@ GUI. Рабочая версия для цеха — графическая, с�
 import argparse
 import json
 import sys
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from . import i18n, presentation
 from .core import balance
@@ -37,23 +37,27 @@ def _write(stream, text):
         stream.write(text.encode(encoding, 'replace').decode(encoding) + '\n')
 
 
-def _table(statuses: List[PartStatus]) -> List[str]:
-    head = presentation.columns()
-    rows = presentation.rows(statuses)
+def _table(head: List[str], rows: List[List[str]],
+           align: Sequence[str]) -> List[str]:
+    """Выровненная таблица. Правило выравнивания задаётся на колонку."""
     widths = [len(cell) for cell in head]
     for row in rows:
         for index, cell in enumerate(row):
             widths[index] = max(widths[index], len(cell))
 
     def line(cells):
-        parts = [cells[0].ljust(widths[0])]
-        parts += [cells[i].rjust(widths[i]) for i in (1, 2, 3)]
-        parts.append(cells[4].ljust(widths[4]))
+        parts = []
+        for index, cell in enumerate(cells):
+            rule = align[index] if index < len(align) else 'l'
+            if rule == 'r':
+                parts.append(cell.rjust(widths[index]))
+            elif rule == 'c':
+                parts.append(cell.center(widths[index]))
+            else:
+                parts.append(cell.ljust(widths[index]))
         return '  '.join(parts).rstrip()
 
-    out = [line(head), '  '.join('-' * w for w in widths)]
-    out += [line(row) for row in rows]
-    return out
+    return [line(head), '  '.join('-' * w for w in widths)] + [line(r) for r in rows]
 
 
 def _as_json(summary: ShiftSummary,
@@ -102,6 +106,9 @@ def build_parser():
                         help=i18n.t('cli.help.done'))
     parser.add_argument('-s', '--search', metavar='TEXT',
                         help=i18n.t('cli.help.search'))
+    parser.add_argument('-m', '--mode', choices=presentation.MODES,
+                        default=presentation.MODE_PARTS,
+                        help=i18n.t('cli.help.mode'))
     parser.add_argument('--only', choices=presentation.ONLY_CHOICES, default='all',
                         help=i18n.t('cli.help.only'))
     parser.add_argument('--validate', action='store_true',
@@ -136,7 +143,14 @@ def main(argv: Optional[List[str]] = None,
         return EXIT_ERROR
 
     statuses = balance.status_at(summary, args.done)
-    shown = presentation.filter_statuses(statuses, args.only, args.search)
+    by_programs = args.mode == presentation.MODE_PROGRAMS
+    if by_programs:
+        programs = presentation.filter_programs(
+            summary.usable_programs, args.only, args.search, args.done)
+        shown = presentation.filter_statuses(statuses, args.only, args.search)
+    else:
+        programs = []
+        shown = presentation.filter_statuses(statuses, args.only, args.search)
 
     check = balance.cross_check(summary.programs, DEFAULT_SYNTAX) if args.validate else None
 
@@ -149,8 +163,14 @@ def main(argv: Optional[List[str]] = None,
             value=args.done if args.done is not None
             else i18n.t('programs.not_started')))
         _write(out, '')
-        if shown:
-            for row in _table(shown):
+        if by_programs:
+            head = presentation.columns(presentation.MODE_PROGRAMS)
+            body = presentation.program_rows(programs, args.done)
+        else:
+            head = presentation.columns(presentation.MODE_PARTS)
+            body = presentation.rows(shown)
+        if body:
+            for row in _table(head, body, presentation.align(args.mode)):
                 _write(out, row)
         else:
             _write(out, i18n.t('table.empty'))

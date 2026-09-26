@@ -85,6 +85,21 @@ def read_text(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Tuple[str, s
     return decode(raw, syntax)
 
 
+def find_sibling(path: str, suffixes: Tuple[str, ...]) -> Optional[str]:
+    """Найти рядом с файлом однофамильца с другим расширением.
+
+    Регистр расширения на разных системах разный: файлы могли прийти
+    с Windows, где PRG_07.PDF и PRG_07.pdf — одно и то же.
+    """
+    stem = os.path.splitext(path)[0]
+    for suffix in suffixes:
+        for candidate in (stem + suffix, stem + suffix.upper(),
+                          stem + suffix.lower()):
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
+
 def program_number(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Optional[int]:
     """Номер программы из имени файла.
 
