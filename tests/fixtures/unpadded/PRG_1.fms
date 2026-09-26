@@ -25,6 +25,10 @@ PART_NO02 : Size 165.0 x 95.0, Number=4, Forming=0
 C:\CAM\PARTS\PART_NO02.cp
 PART_NO05 : Size 390.0 x 410.0, Number=1, Forming=0
 C:\CAM\PARTS\PART_NO05.cp
+PART_NO13 : Size 140.0 x 70.0, Number=3, Forming=0
+C:\CAM\PARTS\PART_NO13.cp
+PART_NO14 : Size 520.0 x 310.0, Number=2, Forming=0
+C:\CAM\PARTS\PART_NO14.cp
 #TIMES
 SHEET USAGE EFFICIENCY : 75.0%
 TOOL CHANGES : 5
@@ -43,3 +47,7 @@ R:X20Y10:0:0.4::6:;TOOL_NA31;
 (1) PATH : C:\CAM\PARTS\PART_NO02.cp
 (2) PART_NO05 : Size 390.0 x 410.0, Number = 1, Rev =
 (2) PATH : C:\CAM\PARTS\PART_NO05.cp
+(3) PART_NO13 : Size 140.0 x 70.0, Number = 3, Rev =
+(3) PATH : C:\CAM\PARTS\PART_NO13.cp
+(4) PART_NO14 : Size 520.0 x 310.0, Number = 2, Rev =
+(4) PATH : C:\CAM\PARTS\PART_NO14.cp
