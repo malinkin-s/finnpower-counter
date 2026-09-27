@@ -4,6 +4,7 @@
 import io
 import json
 import os
+import re
 
 import pytest
 
@@ -22,6 +23,12 @@ def run(argv, lang='ru'):
     out, err = io.StringIO(), io.StringIO()
     code = cli.main(argv, stdout=out, stderr=err)
     return code, out.getvalue(), err.getvalue()
+
+
+def program_rows(text):
+    """Строки таблицы в режиме программ: пометка выполнения плюс имя."""
+    pattern = re.compile(r'^({}|\s)\s+PRG_'.format(presentation.MARK_DONE))
+    return [line for line in text.splitlines() if pattern.match(line)]
 
 
 @pytest.fixture
@@ -181,7 +188,7 @@ def test_режим_деталей_по_умолчанию(shift_dir):
 
 def test_отбор_программ_в_консоли(shift_dir):
     def rows(text):
-        return [l for l in text.splitlines() if l.startswith('PRG_')]
+        return program_rows(text)
     _, done, _ = run(['--dir', shift_dir, '-n', '5', '-m', 'programs', '--only', 'done'])
     _, work, _ = run(['--dir', shift_dir, '-n', '5', '-m', 'programs', '--only', 'work'])
     assert len(rows(done)) == 5
@@ -190,5 +197,5 @@ def test_отбор_программ_в_консоли(shift_dir):
 
 def test_поиск_программы_в_консоли(shift_dir):
     _, out, _ = run(['--dir', shift_dir, '-m', 'programs', '-s', '7'])
-    rows = [l for l in out.splitlines() if l.startswith('PRG_')]
-    assert len(rows) == 1 and rows[0].startswith('PRG_07')
+    rows = program_rows(out)
+    assert len(rows) == 1 and 'PRG_07' in rows[0]

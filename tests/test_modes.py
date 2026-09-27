@@ -74,12 +74,19 @@ def test_выравнивание_есть_для_каждой_колонки():
 
 def test_строка_программы(shift_ok):
     nest = next(n for n in shift_ok.programs if n.position == 6)
-    row = presentation.program_row(nest, done=12)
-    assert row[0] == 'PRG_06'
-    assert row[1] == '3000 x 1500'
-    assert row[2] == '3'
-    assert row[3] == str(nest.unique_parts)
-    assert row[4] == str(nest.total_pieces)
+    row = presentation.program_row(nest, done={6})
+    assert row[0] == presentation.MARK_DONE
+    assert row[1] == 'PRG_06'
+    assert row[2] == '3000 x 1500'
+    assert row[3] == '3'
+    assert row[4] == str(nest.unique_parts)
+    assert row[5] == str(nest.total_pieces)
+
+
+def test_отметка_ставится_только_отмеченным(shift_ok):
+    nest = next(n for n in shift_ok.programs if n.position == 6)
+    assert presentation.program_row(nest, done={1, 2})[0] == presentation.MARK_NONE
+    assert presentation.program_row(nest, done=())[0] == presentation.MARK_NONE
 
 
 def test_число_деталей_в_программе_это_листы_на_количество(shift_ok):
@@ -93,13 +100,15 @@ def test_сумма_по_программам_равна_итогу_смены(s
 
 
 @pytest.mark.parametrize('done, only, count', [
-    (5, presentation.ONLY_ALL, 12),
-    (5, presentation.ONLY_DONE, 5),
-    (5, presentation.ONLY_WORK, 7),
-    (None, presentation.ONLY_DONE, 0),
-    (None, presentation.ONLY_WORK, 12),
+    ({1, 2, 3, 4, 5}, presentation.ONLY_ALL, 12),
+    ({1, 2, 3, 4, 5}, presentation.ONLY_DONE, 5),
+    ({1, 2, 3, 4, 5}, presentation.ONLY_WORK, 7),
+    (set(), presentation.ONLY_DONE, 0),
+    (set(), presentation.ONLY_WORK, 12),
+    ({2, 7}, presentation.ONLY_DONE, 2),
 ])
 def test_отбор_программ(shift_ok, done, only, count):
+    """Отметки — произвольный набор, а не обязательно всё подряд."""
     got = presentation.filter_programs(shift_ok.usable_programs, only, None, done)
     assert len(got) == count
 

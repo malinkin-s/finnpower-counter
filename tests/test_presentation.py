@@ -96,7 +96,7 @@ def test_сверка_не_выполнялась():
 
 
 def test_csv_разбирается_обратно():
-    text = presentation.to_csv(SAMPLE, done_program=9)
+    text = presentation.to_csv(SAMPLE, done_count=9)
     rows = list(csv.reader(io.StringIO(text), delimiter=';'))
     assert rows[0] == ['Выполнено программ:', '9']
     assert rows[1] == presentation.columns()
@@ -112,7 +112,7 @@ def test_csv_без_номера_программы():
 def test_csv_пишется_с_bom(tmp_path):
     """Без BOM русский Excel открывает файл кракозябрами."""
     path = str(tmp_path / 'готовность.csv')
-    presentation.write_csv(path, SAMPLE, done_program=9)
+    presentation.write_csv(path, SAMPLE, done_count=9)
     with open(path, 'rb') as fh:
         raw = fh.read()
     assert raw.startswith(b'\xef\xbb\xbf')

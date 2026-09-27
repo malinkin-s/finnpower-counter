@@ -119,6 +119,11 @@ def build_parser():
                         help=i18n.t('cli.help.mode'))
     parser.add_argument('--only', choices=presentation.ONLY_CHOICES, default='all',
                         help=i18n.t('cli.help.only'))
+    parser.add_argument('--sort', metavar='COLUMN',
+                        help=i18n.t('cli.help.sort',
+                                    choices='/'.join(presentation.sort_choices())))
+    parser.add_argument('--desc', action='store_true',
+                        help=i18n.t('cli.help.desc'))
     parser.add_argument('--validate', action='store_true',
                         help=i18n.t('cli.help.validate'))
     parser.add_argument('--json', action='store_true',
@@ -156,15 +161,26 @@ def main(argv: Optional[List[str]] = None,
         _write(err, i18n.t('cli.error', message=exc.args[0]))
         return EXIT_ERROR
 
-    statuses = balance.status_at(summary, done)
+    places = balance.positions_upto(summary, done)
+    statuses = balance.status_for(summary, places)
+
+    column = presentation.sort_column(args.mode, args.sort)
+    if args.sort and column is None:
+        _write(err, i18n.t('cli.error.sort', value=args.sort,
+                           choices='/'.join(presentation.sort_choices())))
+        return EXIT_ERROR
+
     by_programs = args.mode == presentation.MODE_PROGRAMS
+    shown = presentation.sort_statuses(
+        presentation.filter_statuses(statuses, args.only, args.search),
+        column if not by_programs else None, args.desc)
     if by_programs:
-        programs = presentation.filter_programs(
-            summary.usable_programs, args.only, args.search, done)
-        shown = presentation.filter_statuses(statuses, args.only, args.search)
+        programs = presentation.sort_programs(
+            presentation.filter_programs(
+                summary.usable_programs, args.only, args.search, places),
+            column, args.desc, places)
     else:
         programs = []
-        shown = presentation.filter_statuses(statuses, args.only, args.search)
 
     check = balance.cross_check(summary.programs, DEFAULT_SYNTAX) if args.validate else None
 
@@ -178,7 +194,7 @@ def main(argv: Optional[List[str]] = None,
         _write(out, '')
         if by_programs:
             head = presentation.columns(presentation.MODE_PROGRAMS)
-            body = presentation.program_rows(programs, done)
+            body = presentation.program_rows(programs, places)
         else:
             head = presentation.columns(presentation.MODE_PARTS)
             body = presentation.rows(shown)

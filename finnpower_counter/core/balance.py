@@ -2,7 +2,7 @@
 """Свод смены и сверка с отчётами наладки."""
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional, Set
 
 from .. import i18n
 from . import fms_parser, nc_parser, reader
@@ -51,24 +51,37 @@ def summarize(programs: List[ProgramNest]) -> ShiftSummary:
     return ShiftSummary(programs=ordered, parts=parts, warnings=warnings)
 
 
-def status_at(summary: ShiftSummary, done: Optional[int]) -> List[PartStatus]:
-    """Состояние позиций, когда выполнены программы по место done.
+def positions_upto(summary: ShiftSummary, done: Optional[int]) -> Set[int]:
+    """Места, выполненные при вводе «выполнено по №».
 
-    done=None — смена ещё не начата, изготовлено ноль.
+    Отдельная функция, потому что ввод номера — это всего лишь быстрый способ
+    отметить всё подряд до указанного места. Дальше оператор может снять
+    отдельные отметки: программы не всегда идут по порядку.
     """
+    if done is None:
+        return set()
+    return {place for place in summary.positions if place <= done}
+
+
+def status_for(summary: ShiftSummary,
+               done: Iterable[int]) -> List[PartStatus]:
+    """Состояние позиций при произвольном наборе выполненных программ."""
+    places = set(done)
     statuses = []
     for part in summary.parts:
-        if done is None:
-            produced = 0
-        else:
-            produced = sum(count for place, count in part.by_program.items()
-                           if place <= done)
+        produced = sum(count for place, count in part.by_program.items()
+                       if place in places)
         statuses.append(PartStatus(part=part.part,
                                    total=part.total,
                                    last_position=part.last_position,
                                    last_program=part.last_program,
                                    produced=produced))
     return statuses
+
+
+def status_at(summary: ShiftSummary, done: Optional[int]) -> List[PartStatus]:
+    """Состояние позиций, когда выполнены все программы по место done."""
+    return status_for(summary, positions_upto(summary, done))
 
 
 def resolve_position(summary: ShiftSummary, text: str) -> Optional[int]:

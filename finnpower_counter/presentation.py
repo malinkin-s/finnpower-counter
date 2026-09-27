@@ -10,7 +10,7 @@
 
 import csv
 import io
-from typing import Iterable, List, Optional, Sequence
+from typing import Callable, Dict, Iterable, List, Optional, Sequence
 
 from . import i18n
 from .core.model import CrossCheckResult, PartStatus, PartTotal, ProgramNest, ShiftSummary
@@ -23,8 +23,17 @@ MODES = (MODE_PARTS, MODE_PROGRAMS)
 # Устойчивые обозначения колонок. Порядок задаёт порядок в таблице и в CSV.
 COLUMN_KEYS = ('col.part', 'col.total', 'col.last_program',
                'col.produced', 'col.status')
-PROGRAM_COLUMN_KEYS = ('col.program', 'col.sheet_size', 'col.sheets',
+PROGRAM_COLUMN_KEYS = ('col.mark', 'col.program', 'col.sheet_size', 'col.sheets',
                        'col.positions', 'col.pieces', 'col.status')
+
+# Отметка выполнения. Вынесена в константы: если на цеховой машине галочка
+# не отрисуется, её меняют здесь, не трогая остальной код.
+MARK_DONE = '\u2713'
+MARK_NONE = ''
+
+# Указатель направления сортировки в заголовке колонки.
+ARROW_UP = ' \u25b2'
+ARROW_DOWN = ' \u25bc'
 # Колонки окна отдельной позиции.
 DETAIL_COLUMN_KEYS = ('col.program', 'col.sheets', 'col.per_sheet',
                       'col.in_program', 'col.cumulative')
@@ -33,7 +42,7 @@ DETAIL_COLUMN_KEYS = ('col.program', 'col.sheets', 'col.per_sheet',
 # Числа вправо, обозначения и статусы влево, размер листа — как текст.
 COLUMN_ALIGN = {
     MODE_PARTS: ('l', 'r', 'r', 'r', 'l'),
-    MODE_PROGRAMS: ('l', 'l', 'r', 'r', 'r', 'l'),
+    MODE_PROGRAMS: ('c', 'l', 'l', 'r', 'r', 'r', 'l'),
 }
 DETAIL_ALIGN = ('l', 'r', 'r', 'r', 'r')
 
@@ -97,9 +106,14 @@ def rows(statuses: Iterable[PartStatus]) -> List[List[str]]:
     return [row(s) for s in statuses]
 
 
-def program_row(nest: ProgramNest, done: Optional[int] = None) -> List[str]:
-    executed = done is not None and nest.position <= done
-    return [nest.name,
+def is_executed(nest: ProgramNest, done: Iterable[int] = ()) -> bool:
+    return nest.position in set(done)
+
+
+def program_row(nest: ProgramNest, done: Iterable[int] = ()) -> List[str]:
+    executed = is_executed(nest, done)
+    return [MARK_DONE if executed else MARK_NONE,
+            nest.name,
             nest.sheet_size or '—',
             '—' if nest.sheet_count is None else str(nest.sheet_count),
             str(nest.unique_parts),
@@ -108,14 +122,15 @@ def program_row(nest: ProgramNest, done: Optional[int] = None) -> List[str]:
 
 
 def program_rows(programs: Iterable[ProgramNest],
-                 done: Optional[int] = None) -> List[List[str]]:
-    return [program_row(nest, done) for nest in programs]
+                 done: Iterable[int] = ()) -> List[List[str]]:
+    places = set(done)
+    return [program_row(nest, places) for nest in programs]
 
 
 def filter_programs(programs: Iterable[ProgramNest],
                     only: str = ONLY_ALL,
                     search: Optional[str] = None,
-                    done: Optional[int] = None) -> List[ProgramNest]:
+                    done: Iterable[int] = ()) -> List[ProgramNest]:
     """Отобрать программы для показа.
 
     В этом режиме «готово» означает «программа выполнена».
@@ -126,10 +141,11 @@ def filter_programs(programs: Iterable[ProgramNest],
     оператор ищет именно куском имени.
     """
     result = list(programs)
+    places = set(done)
     if only == ONLY_DONE:
-        result = [p for p in result if done is not None and p.position <= done]
+        result = [p for p in result if p.position in places]
     elif only == ONLY_WORK:
-        result = [p for p in result if done is None or p.position > done]
+        result = [p for p in result if p.position not in places]
     if search:
         needle = search.strip().lower()
         if needle.isdigit() and any(p.position == int(needle) for p in result):
@@ -189,8 +205,88 @@ def cross_check_line(result: Optional[CrossCheckResult]) -> str:
     return line
 
 
+# Сортировка идёт по данным, а не по тому, что напечатано в ячейке:
+# «Крайняя УП» показывает имя, а упорядочивать её надо по месту в задании.
+PART_SORT_KEYS: Dict[str, Callable] = {
+    'col.part': lambda s: s.part,
+    'col.total': lambda s: s.total,
+    'col.last_program': lambda s: s.last_position,
+    'col.produced': lambda s: s.produced,
+    'col.status': lambda s: s.is_complete,
+}
+
+
+def sort_statuses(statuses: Iterable[PartStatus],
+                  column: Optional[str] = None,
+                  reverse: bool = False) -> List[PartStatus]:
+    """Упорядочить позиции. Без колонки — по артикулу."""
+    items = list(statuses)
+    key = PART_SORT_KEYS.get(column or '')
+    if key is None:
+        return sorted(items, key=lambda s: s.part, reverse=reverse)
+    # Артикул вторым ключом, иначе равные значения встают как попало.
+    return sorted(items, key=lambda s: (key(s), s.part), reverse=reverse)
+
+
+def program_sort_keys(done: Iterable[int] = ()) -> Dict[str, Callable]:
+    places = set(done)
+    return {
+        'col.mark': lambda n: n.position in places,
+        'col.program': lambda n: n.name.lower(),
+        'col.sheet_size': lambda n: (n.sheet_x or 0) * (n.sheet_y or 0),
+        'col.sheets': lambda n: n.sheet_count or 0,
+        'col.positions': lambda n: n.unique_parts,
+        'col.pieces': lambda n: n.total_pieces,
+        'col.status': lambda n: n.position in places,
+    }
+
+
+def sort_programs(programs: Iterable[ProgramNest],
+                  column: Optional[str] = None,
+                  reverse: bool = False,
+                  done: Iterable[int] = ()) -> List[ProgramNest]:
+    """Упорядочить программы. Без колонки — по месту в задании."""
+    items = list(programs)
+    key = program_sort_keys(done).get(column or '')
+    if key is None:
+        return sorted(items, key=lambda n: n.position, reverse=reverse)
+    return sorted(items, key=lambda n: (key(n), n.position), reverse=reverse)
+
+
+def sortable(mode: str, column: str) -> bool:
+    keys = PART_SORT_KEYS if mode == MODE_PARTS else program_sort_keys()
+    return column in keys
+
+
+def sort_choices() -> List[str]:
+    """Короткие имена колонок для консоли: col.total -> total."""
+    keys = list(COLUMN_KEYS) + list(PROGRAM_COLUMN_KEYS)
+    seen = []
+    for key in keys:
+        short = key.split('.', 1)[1]
+        if short not in seen:
+            seen.append(short)
+    return seen
+
+
+def sort_column(mode: str, short: Optional[str]) -> Optional[str]:
+    """Найти колонку режима по короткому имени."""
+    if not short:
+        return None
+    key = 'col.' + short.strip().lower()
+    return key if sortable(mode, key) else None
+
+
+def heading(column: str, active: Optional[str], reverse: bool) -> str:
+    """Подпись колонки со стрелкой, если сортировка идёт по ней."""
+    title = i18n.t(column)
+    if column != active:
+        return title
+    return title + (ARROW_DOWN if reverse else ARROW_UP)
+
+
 def to_csv(statuses: Iterable[PartStatus],
-           done_program: Optional[int] = None,
+           done_count: Optional[int] = None,
            delimiter: str = ';') -> str:
     """Выгрузка для маршрутного листа.
 
@@ -198,8 +294,8 @@ def to_csv(statuses: Iterable[PartStatus],
     """
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=delimiter, lineterminator='\r\n')
-    if done_program is not None:
-        writer.writerow([i18n.t('csv.done_programs'), done_program])
+    if done_count is not None:
+        writer.writerow([i18n.t('csv.done_programs'), done_count])
     writer.writerow(columns(MODE_PARTS))
     for status in statuses:
         writer.writerow(row(status))
@@ -208,7 +304,7 @@ def to_csv(statuses: Iterable[PartStatus],
 
 def write_csv(path: str,
               statuses: Iterable[PartStatus],
-              done_program: Optional[int] = None) -> None:
+              done_count: Optional[int] = None) -> None:
     """Записать выгрузку. utf-8 с BOM — иначе Excel портит кириллицу."""
     with open(path, 'w', encoding='utf-8-sig', newline='') as fh:
-        fh.write(to_csv(statuses, done_program))
+        fh.write(to_csv(statuses, done_count))
