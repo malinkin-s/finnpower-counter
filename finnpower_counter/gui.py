@@ -179,7 +179,6 @@ class CounterApp(object):
         self.sort_reverse = False
 
         self.var_dir = tk.StringVar(value=i18n.t('ui.no_dir'))
-        self.var_done = tk.StringVar()
         self.var_search = tk.StringVar()
         self.var_only = tk.StringVar(value=presentation.ONLY_ALL)
         self.var_mode = tk.StringVar(value=presentation.MODE_PARTS)
@@ -203,7 +202,7 @@ class CounterApp(object):
 
     def _build(self) -> None:
         self.master.title(i18n.t('app.title'))
-        self.master.minsize(860, 520)
+        self.master.minsize(960, 520)
         root = ttk.Frame(self.master, padding=10)
         root.pack(fill='both', expand=True)
         root.columnconfigure(0, weight=1)
@@ -240,47 +239,22 @@ class CounterApp(object):
         self.cmb_lang.bind('<<ComboboxSelected>>', self._change_language)
 
     def _build_controls(self, parent: tk.Misc) -> None:
-        """Две строки, а не одна.
+        """Режим, отбор и поиск в одну строку.
 
-        В одну строку всё это требует около 1250 пикселей — при минимальной
-        ширине окна элементы наезжали друг на друга. Левые блоки собраны
-        в отдельные рамки и растут по содержимому, между ними и поиском
-        стоит пустая колонка-распорка.
+        Слева блоки, растущие по содержимому, справа поиск, между ними пустая
+        колонка-распорка. Без распорки при нехватке ширины элементы наезжают
+        друг на друга.
         """
         box = ttk.Frame(parent, padding=(0, 10, 0, 6))
         box.grid(row=1, column=0, sticky='ew')
         box.columnconfigure(1, weight=1)
 
-        # --- верхняя строка: выполненная программа и поиск ---
-        top = ttk.Frame(box)
-        top.grid(row=0, column=0, sticky='w')
+        left = ttk.Frame(box)
+        left.grid(row=0, column=0, sticky='w')
 
-        self.lbl_done = ttk.Label(top, text=i18n.t('ui.done_label'), font=FONT_BOLD)
-        self.lbl_done.grid(row=0, column=0, sticky='w')
-        entry = ttk.Entry(top, textvariable=self.var_done, width=16,
-                          font=FONT_BIG, justify='center')
-        entry.grid(row=0, column=1, sticky='w', padx=(8, 8))
-        entry.bind('<Return>', lambda _: self._recalculate())
-        self.entry_done = entry
-        self.btn_calc = ttk.Button(top, text=i18n.t('ui.calculate'),
-                                   command=self._recalculate)
-        self.btn_calc.grid(row=0, column=2, sticky='w')
-
-        search_box = ttk.Frame(box)
-        search_box.grid(row=0, column=2, sticky='e')
-        self.lbl_search = ttk.Label(search_box, text=i18n.t('ui.search_parts'),
-                                    font=FONT)
-        self.lbl_search.grid(row=0, column=0)
-        ttk.Entry(search_box, textvariable=self.var_search, width=20,
-                  font=FONT).grid(row=0, column=1, padx=(8, 0))
-
-        # --- нижняя строка: режим и отбор ---
-        bottom = ttk.Frame(box)
-        bottom.grid(row=1, column=0, columnspan=3, sticky='w', pady=(8, 0))
-
-        self.lbl_mode = ttk.Label(bottom, text=i18n.t('ui.mode'), font=FONT)
+        self.lbl_mode = ttk.Label(left, text=i18n.t('ui.mode'), font=FONT_BOLD)
         self.lbl_mode.grid(row=0, column=0, sticky='w')
-        modes = ttk.Frame(bottom)
+        modes = ttk.Frame(left)
         modes.grid(row=0, column=1, sticky='w', padx=(8, 0))
         self.mode_buttons = {}
         for index, (value, key) in enumerate((
@@ -291,12 +265,12 @@ class CounterApp(object):
             button.grid(row=0, column=index, padx=(0, 10))
             self.mode_buttons[key] = button
 
-        ttk.Separator(bottom, orient='vertical').grid(row=0, column=2,
-                                                      sticky='ns', padx=14)
+        ttk.Separator(left, orient='vertical').grid(row=0, column=2,
+                                                    sticky='ns', padx=14)
 
-        self.lbl_show = ttk.Label(bottom, text=i18n.t('ui.show'), font=FONT)
+        self.lbl_show = ttk.Label(left, text=i18n.t('ui.show'), font=FONT)
         self.lbl_show.grid(row=0, column=3, sticky='w')
-        choices = ttk.Frame(bottom)
+        choices = ttk.Frame(left)
         choices.grid(row=0, column=4, sticky='w', padx=(8, 0))
         self.radios = {}
         for index, (value, key) in enumerate((
@@ -307,6 +281,15 @@ class CounterApp(object):
                                      variable=self.var_only)
             button.grid(row=0, column=index, padx=(0, 10))
             self.radios[key] = button
+
+        search_box = ttk.Frame(box)
+        search_box.grid(row=0, column=2, sticky='e')
+        self.lbl_search = ttk.Label(search_box, text=i18n.t('ui.search_parts'),
+                                    font=FONT)
+        self.lbl_search.grid(row=0, column=0)
+        self.entry_search = ttk.Entry(search_box, textvariable=self.var_search,
+                                      width=20, font=FONT)
+        self.entry_search.grid(row=0, column=1, padx=(8, 0))
 
     def _build_table(self, parent: tk.Misc) -> None:
         box = ttk.Frame(parent)
@@ -421,8 +404,6 @@ class CounterApp(object):
         self.btn_choose.configure(text=i18n.t('ui.choose_dir'))
         self.btn_reload.configure(text=i18n.t('ui.reload'))
         self.lbl_lang.configure(text=i18n.t('ui.language'))
-        self.lbl_done.configure(text=i18n.t('ui.done_label'))
-        self.btn_calc.configure(text=i18n.t('ui.calculate'))
         self.lbl_mode.configure(text=i18n.t('ui.mode'))
         for key, button in self.mode_buttons.items():
             button.configure(text=i18n.t(key))
@@ -490,7 +471,6 @@ class CounterApp(object):
         self.done_positions = set()
         self.sort_column = None
         self.sort_reverse = False
-        self.var_done.set('')
 
         self.var_dir.set(directory)
         self.btn_reload.configure(state='normal')
@@ -501,23 +481,8 @@ class CounterApp(object):
             if summary.warnings else i18n.t('ui.warnings'))
 
         self._show_cross_check()
-        self._recalculate()
-        self.entry_done.focus_set()
-
-    def _recalculate(self) -> None:
-        """Ввод номера — быстрый способ отметить всё подряд до указанной УП.
-
-        Дальше отметки правятся галочками: программы не всегда идут по порядку.
-        """
-        if self.summary is None:
-            return
-        try:
-            done = balance.resolve_position(self.summary, self.var_done.get())
-        except ValueError as exc:
-            messagebox.showwarning(i18n.t('app.title'), str(exc.args[0]))
-            return
-        self.done_positions = balance.positions_upto(self.summary, done)
         self._restate()
+        self.entry_search.focus_set()
 
     def _restate(self) -> None:
         """Пересчитать готовность по текущему набору отметок."""

@@ -86,8 +86,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.choose_dir': 'Choose program folder…',
         'ui.no_dir': 'no folder selected',
         'ui.reload': 'Reload',
-        'ui.done_label': 'Programs completed up to no.:',
-        'ui.calculate': 'Calculate',
         'ui.show': 'Show:',
         'ui.only_all': 'all',
         'ui.only_done': 'done',
@@ -100,10 +98,13 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.mode': 'View:',
         'ui.mode_parts': 'by part',
         'ui.mode_programs': 'by program',
-        'ui.search_parts': 'Find part:',
-        'ui.search_programs': 'Find program:',
-        'ui.hint_parts': 'Double-click a part to see its programs.',
-        'ui.hint_programs': 'Double-click a program to open its setup report.',
+        'ui.search_parts': 'Part:',
+        'ui.search_programs': 'Program:',
+        'ui.hint_parts': ('Double-click a part to see its programs. '
+                          'Mark completed programs in the "by program" view.'),
+        'ui.hint_programs': ('Click the check column to mark a program done, '
+                             'Shift+click to mark everything up to it. '
+                             'Double-click a row to open its setup report.'),
 
         # --- окно позиции ---
         'detail.title': '{part} — {total} pcs, last program {last}',
@@ -218,8 +219,6 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.choose_dir': 'Выбрать папку с программами…',
         'ui.no_dir': 'папка не выбрана',
         'ui.reload': 'Перечитать',
-        'ui.done_label': 'Выполнено программ по №:',
-        'ui.calculate': 'Рассчитать',
         'ui.show': 'Показывать:',
         'ui.only_all': 'все',
         'ui.only_done': 'готовые',
@@ -232,10 +231,13 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.mode': 'Показ:',
         'ui.mode_parts': 'по деталям',
         'ui.mode_programs': 'по программам',
-        'ui.search_parts': 'Поиск позиции:',
-        'ui.search_programs': 'Поиск программы:',
-        'ui.hint_parts': 'Двойной щелчок по детали — программы, в которых она есть.',
-        'ui.hint_programs': 'Двойной щелчок по программе — открыть карту наладки.',
+        'ui.search_parts': 'Деталь:',
+        'ui.search_programs': 'Программа:',
+        'ui.hint_parts': ('Двойной щелчок по детали — программы, в которых она есть. '
+                          'Отметки выполнения ставятся в режиме «по программам».'),
+        'ui.hint_programs': ('Щелчок по колонке с галочкой отмечает программу, '
+                             'с Shift — все до неё. Двойной щелчок по строке '
+                             'открывает карту наладки.'),
 
         'detail.title': '{part} — {total} шт, крайняя УП {last}',
         'detail.summary': 'Всего {total} шт в {count} программах, закрывается на {last}',
