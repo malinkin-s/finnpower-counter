@@ -15,7 +15,7 @@ import json
 import sys
 from typing import List, Optional, Sequence
 
-from . import i18n, presentation
+from . import i18n, presentation, report
 from .core import balance
 from .core.model import PartStatus, ShiftSummary
 from .core.syntax import DEFAULT_SYNTAX
@@ -128,6 +128,8 @@ def build_parser():
                         help=i18n.t('cli.help.validate'))
     parser.add_argument('--json', action='store_true',
                         help=i18n.t('cli.help.json'))
+    parser.add_argument('--report', action='store_true',
+                        help=i18n.t('cli.help.report'))
     parser.add_argument('--lang', choices=i18n.available(),
                         help=i18n.t('cli.help.lang',
                                     choices='/'.join(i18n.available())))
@@ -224,10 +226,31 @@ def main(argv: Optional[List[str]] = None,
             for warning in summary.warnings:
                 _write(out, '  {}'.format(warning))
 
+    if args.report:
+        path = report.save(summary, actions=['режим: {}'.format(args.mode)])
+        if path is None:
+            _write(err, i18n.t('report.failed'))
+        else:
+            _write(out, i18n.t('report.cli', path=path))
+
     if summary.warnings or (check is not None and check.mismatches):
         return EXIT_WARNINGS
     return EXIT_OK
 
 
+def run(argv: Optional[List[str]] = None) -> int:
+    """Запуск с сохранением отчёта при непредвиденной ошибке."""
+    try:
+        return main(argv)
+    except SystemExit:
+        raise
+    except Exception:
+        path = report.save(exc_info=sys.exc_info())
+        _write(sys.stderr, i18n.t('cli.error', message=sys.exc_info()[1]))
+        if path:
+            _write(sys.stderr, i18n.t('report.cli', path=path))
+        return EXIT_ERROR
+
+
 if __name__ == '__main__':  # pragma: no cover
-    sys.exit(main())
+    sys.exit(run())

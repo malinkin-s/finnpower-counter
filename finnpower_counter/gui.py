@@ -17,10 +17,11 @@
 import os
 import sys
 import tkinter as tk
+from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 from typing import Dict, List, Optional, Set
 
-from . import i18n, presentation, system
+from . import i18n, presentation, report, system
 from .core import balance, fms_parser
 from .core.model import PartStatus, PartTotal, ShiftSummary
 from .core.syntax import DEFAULT_SYNTAX
@@ -50,6 +51,9 @@ ANCHORS = {'l': 'w', 'r': 'e', 'c': 'center'}
 ROW_PART = 'part:'
 ROW_PROGRAM = 'prog:'
 ROW_EMPTY = 'empty'
+
+# Сколько действий держать для отчёта об ошибке.
+ACTION_LOG_SIZE = 25
 
 
 def _enable_dpi_awareness() -> None:
@@ -177,6 +181,9 @@ class CounterApp(object):
         self.done_positions: Set[int] = set()
         self.sort_column: Optional[str] = None
         self.sort_reverse = False
+        # Кольцевой журнал последних действий. Идёт в отчёт об ошибке, чтобы
+        # не приходилось выспрашивать у оператора, что он делал.
+        self.actions: List[str] = []
 
         self.var_dir = tk.StringVar(value=i18n.t('ui.no_dir'))
         self.var_search = tk.StringVar()
@@ -333,11 +340,56 @@ class CounterApp(object):
         self.btn_warnings.grid(row=0, column=0, padx=(0, 8))
         self.btn_export = ttk.Button(buttons, text=i18n.t('ui.export'),
                                      command=self._export, state='disabled')
-        self.btn_export.grid(row=0, column=1)
+        self.btn_export.grid(row=0, column=1, padx=(0, 8))
+        self.btn_report = ttk.Button(buttons, text=i18n.t('ui.report'),
+                                     command=self._on_report)
+        self.btn_report.grid(row=0, column=2)
 
         self.lbl_readonly = ttk.Label(parent, font=FONT, foreground=COLOR_MUTED,
                                       text=i18n.t('app.readonly'), wraplength=800)
         self.lbl_readonly.grid(row=5, column=0, sticky='w', pady=(8, 0))
+
+    def _note(self, text: str) -> None:
+        """Записать действие. Хранятся последние ACTION_LOG_SIZE штук."""
+        self.actions.append('{} {}'.format(
+            datetime.now().strftime('%H:%M:%S'), text))
+        del self.actions[:-ACTION_LOG_SIZE]
+
+    # --- отчёты ---
+
+    def _save_report(self, exc_info=None) -> Optional[str]:
+        path = report.save(self.summary, exc_info, self.actions)
+        if path is None:
+            return None
+        return path
+
+    def _on_report(self) -> None:
+        """Кнопка «Отчёт о работе»: снимок состояния без всякой аварии."""
+        path = self._save_report()
+        if path is None:
+            messagebox.showerror(i18n.t('app.title'), i18n.t('report.failed'))
+            return
+        if messagebox.askyesno(i18n.t('app.title'),
+                               i18n.t('report.saved', path=path)):
+            system.open_folder(os.path.dirname(path))
+
+    def _on_crash(self, exc_type, exc_value, exc_tb) -> None:
+        """Необработанная ошибка. Окно не закрывается, отчёт пишется на диск.
+
+        Сборка идёт с --noconsole, поэтому трассировка иначе пропала бы
+        бесследно, и оператору нечего было бы приложить к сообщению.
+        """
+        path = self._save_report((exc_type, exc_value, exc_tb))
+        error = '{}: {}'.format(exc_type.__name__, exc_value)
+        try:
+            if path is None:
+                messagebox.showerror(i18n.t('app.title'),
+                                     i18n.t('report.crash_nofile', error=error))
+            elif messagebox.askyesno(i18n.t('app.title'),
+                                     i18n.t('report.crash', error=error, path=path)):
+                system.open_folder(os.path.dirname(path))
+        except Exception:
+            pass
 
     # --- режим показа ---
 
@@ -357,6 +409,7 @@ class CounterApp(object):
             text=i18n.t('ui.search_programs' if by_programs else 'ui.search_parts'))
         self.var_hint.set(
             i18n.t('ui.hint_programs' if by_programs else 'ui.hint_parts'))
+        self._note('режим: {}'.format(mode))
         self.sort_column = None
         self.sort_reverse = False
         _configure_tree(self.tree,
@@ -376,6 +429,8 @@ class CounterApp(object):
         else:
             self.sort_column = column
             self.sort_reverse = False
+        self._note('сортировка: {} {}'.format(
+            column, 'по убыванию' if self.sort_reverse else 'по возрастанию'))
         self._apply_headings()
         self._refresh_table()
 
@@ -411,6 +466,7 @@ class CounterApp(object):
         for key, button in self.radios.items():
             button.configure(text=i18n.t(key))
         self.btn_export.configure(text=i18n.t('ui.export'))
+        self.btn_report.configure(text=i18n.t('ui.report'))
         self.lbl_readonly.configure(text=i18n.t('app.readonly'))
         self.cmb_lang.configure(
             values=[i18n.language_name(code) for code in i18n.available()])
@@ -480,6 +536,7 @@ class CounterApp(object):
             text=i18n.t('ui.warnings_n', count=len(summary.warnings))
             if summary.warnings else i18n.t('ui.warnings'))
 
+        self._note('открыто задание, программ {}'.format(len(summary.programs)))
         self._show_cross_check()
         self._restate()
         self.entry_search.focus_set()
@@ -560,6 +617,7 @@ class CounterApp(object):
         else:
             self.done_positions.add(nest.position)
 
+        self._note('отметки: {} программ'.format(len(self.done_positions)))
         self._restate()
         return 'break'
 
@@ -677,7 +735,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         ttk.Style().theme_use('vista')
     except tk.TclError:
         pass
-    CounterApp(root, start_dir=start_dir)
+    app = CounterApp(root, start_dir=start_dir)
+
+    # tkinter отправляет сюда ошибки из обработчиков виджетов, а они и есть
+    # самое частое место сбоя.
+    root.report_callback_exception = app._on_crash
+    sys.excepthook = app._on_crash
+
     root.mainloop()
     return 0
 

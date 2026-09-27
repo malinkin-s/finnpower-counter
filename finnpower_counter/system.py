@@ -11,15 +11,23 @@ import sys
 from typing import Optional
 
 
+def open_folder(path: str) -> Optional[str]:
+    """Открыть папку в проводнике. Возвращает None при успехе или текст ошибки."""
+    return _launch(path, os.path.isdir)
+
+
 def open_document(path: str) -> Optional[str]:
     """Открыть файл назначенным в системе приложением.
 
     Возвращает None при успехе или текст ошибки. Исключения не выпускаются
     наружу: не открывшийся PDF не повод ронять окно оператора.
     """
-    if not path or not os.path.isfile(path):
-        return 'file not found: {}'.format(path)
+    return _launch(path, os.path.isfile)
 
+
+def _launch(path: str, exists) -> Optional[str]:
+    if not path or not exists(path):
+        return 'not found: {}'.format(path)
     try:
         if sys.platform.startswith('win'):
             # os.startfile есть только на Windows — целевой платформе.

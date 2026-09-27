@@ -94,6 +94,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.warnings': 'Notes',
         'ui.warnings_n': 'Notes ({count})',
         'ui.export': 'Export to CSV…',
+        'ui.report': 'Save report…',
         'ui.language': 'Language:',
         'ui.mode': 'View:',
         'ui.mode_parts': 'by part',
@@ -116,6 +117,17 @@ CATALOGS: Dict[str, Dict[str, str]] = {
                            'Type the place in the shift or a longer part of the name.'),
         'done.unknown': ('No program matches "{text}".\n\n'
                          'Type its place in the shift or its name.'),
+
+        'report.saved': ('Report saved:\n{path}\n\n'
+                         'Program and part designations are replaced, paths are '
+                         'trimmed to file names — the file is safe to attach to '
+                         'a bug report.\n\nOpen the folder?'),
+        'report.failed': 'Could not save the report.',
+        'report.crash': ('Something went wrong.\n\n{error}\n\n'
+                         'A report was saved:\n{path}\n\nOpen the folder?'),
+        'report.crash_nofile': ('Something went wrong.\n\n{error}\n\n'
+                                'The report could not be saved.'),
+        'report.cli': 'A report was saved: {path}',
 
         'doc.missing': 'No setup report found next to program {program}.',
         'doc.failed': 'Could not open the setup report.\n\n{error}',
@@ -150,6 +162,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'cli.help.desc': 'sort in descending order',
         'cli.error.sort': ('Error: cannot sort by "{value}" in this view.\n'
                            'Available: {choices}'),
+        'cli.help.report': 'save an anonymised diagnostic report',
         'cli.help.validate': 'cross-check parsing against .fms setup reports',
         'cli.help.json': 'output JSON instead of a table',
         'cli.help.lang': 'interface language ({choices})',
@@ -227,6 +240,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'ui.warnings': 'Замечания',
         'ui.warnings_n': 'Замечания ({count})',
         'ui.export': 'Выгрузить в CSV…',
+        'ui.report': 'Отчёт о работе…',
         'ui.language': 'Язык:',
         'ui.mode': 'Показ:',
         'ui.mode_parts': 'по деталям',
@@ -247,6 +261,17 @@ CATALOGS: Dict[str, Dict[str, str]] = {
                            'Введите место в задании или более длинную часть имени.'),
         'done.unknown': ('Под «{text}» не нашлось ни одной программы.\n\n'
                          'Введите её место в задании или имя.'),
+
+        'report.saved': ('Отчёт сохранён:\n{path}\n\n'
+                         'Обозначения программ и деталей в нём заменены, пути '
+                         'урезаны до имён файлов — файл можно прикладывать '
+                         'к сообщению об ошибке.\n\nОткрыть папку?'),
+        'report.failed': 'Не удалось сохранить отчёт.',
+        'report.crash': ('Что-то пошло не так.\n\n{error}\n\n'
+                         'Отчёт сохранён:\n{path}\n\nОткрыть папку?'),
+        'report.crash_nofile': ('Что-то пошло не так.\n\n{error}\n\n'
+                                'Отчёт сохранить не удалось.'),
+        'report.cli': 'Отчёт сохранён: {path}',
 
         'doc.missing': 'Рядом с программой {program} карты наладки нет.',
         'doc.failed': 'Не удалось открыть карту наладки.\n\n{error}',
@@ -278,6 +303,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'cli.help.desc': 'сортировать по убыванию',
         'cli.error.sort': ('Ошибка: в этом режиме нельзя сортировать по «{value}».\n'
                            'Доступно: {choices}'),
+        'cli.help.report': 'сохранить обезличенный отчёт о работе',
         'cli.help.validate': 'сверить разбор с отчётами наладки .fms',
         'cli.help.json': 'вывод в JSON вместо таблицы',
         'cli.help.lang': 'язык интерфейса ({choices})',
