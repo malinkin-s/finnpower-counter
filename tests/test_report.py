@@ -16,7 +16,7 @@ from finnpower_counter.core import balance
 @pytest.fixture
 def broken():
     try:
-        raise ValueError('сбой на 000101zz201001 в C:\\CAM\\PROGRAMS\\240729\\деталь.nc')
+        raise ValueError('сбой на 000101zz201001 в C:\\CAM\\PROGRAMS\\деталь.nc')
     except ValueError:
         import sys
         return sys.exc_info()
@@ -56,7 +56,7 @@ def test_подстановка_устойчива():
 
 
 @pytest.mark.parametrize('path', [
-    r'C:\CAM\PROGRAMS\240729\PRG_07.nc',
+    r'C:\CAM\PROGRAMS\SHIFT\PRG_07.nc',
     '/home/оператор/цех/смена/PRG_07.nc',
     r'\\SERVER\SHARE\PRG_07.nc',
 ])
@@ -115,7 +115,7 @@ def test_без_задания_отчёт_всё_равно_собирается
 
 
 def test_последние_действия_обезличиваются(shift_ok):
-    text = report.build(shift_ok, actions=[r'открыта C:\CAM\PROGRAMS\240729'])
+    text = report.build(shift_ok, actions=[r'открыта C:\CAM\PROGRAMS\SHIFT'])
     assert 'PROGRAMS' not in text
 
 

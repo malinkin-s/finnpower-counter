@@ -187,8 +187,9 @@ Everything that differs from the defaults lives in [`app.spec`](app.spec)
 rather than in command-line flags, so the build reproduces identically. The
 resulting file needs no Python installation and no internet.
 
-Release procedure, pre-release checks and the versioning rule are in
-[docs/RELEASE.md](docs/RELEASE.md).
+The version lives in one place — `finnpower_counter/__init__.py`. It is also
+shown in the window title and included in error reports, so a bug report always
+says which build it came from.
 
 > One-file executables built by PyInstaller regularly trigger false positives
 > in antivirus software. That is a property of the packer, not a sign of a
@@ -236,8 +237,9 @@ contain plant data, and the report is enough to work from.
 
 ## Data
 
-Real shop files are not published in this repository. Everything here is
-synthetic, produced by [`tools/make_fixtures.py`](tools/make_fixtures.py).
+Real shop files are not published in this repository. Everything here —
+including the screenshots above — is synthetic, produced by
+[`tools/make_fixtures.py`](tools/make_fixtures.py).
 
 The generator deliberately reproduces the format quirks listed above,
 including repeated blocks, the second `SHEET_COUNT` occurrence, CRLF line
@@ -258,11 +260,7 @@ locally; the path is given by `FINNPOWER_DATASET`.
 
 An analysis of what else the machine files contain, what is actually useful
 to an operator or a shift supervisor and what is not worth taking, is in
-[docs/ROADMAP.md](docs/ROADMAP.md).
-
-Research into reading completion straight from the machine control software
-instead of ticking programs by hand is in
-[docs/POWERLINK.md](docs/POWERLINK.md).
+[docs/ROADMAP.md](docs/ROADMAP.md) (in Russian).
 
 ---
 
