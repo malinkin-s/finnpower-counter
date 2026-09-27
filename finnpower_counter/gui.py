@@ -21,7 +21,7 @@ from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 from typing import Dict, List, Optional, Set
 
-from . import i18n, presentation, report, system
+from . import __version__, i18n, presentation, report, system
 from .core import balance, fms_parser
 from .core.model import PartStatus, PartTotal, ShiftSummary
 from .core.syntax import DEFAULT_SYNTAX
@@ -54,6 +54,47 @@ ROW_EMPTY = 'empty'
 
 # Сколько действий держать для отчёта об ошибке.
 ACTION_LOG_SIZE = 25
+
+
+def resource_path(name: str) -> str:
+    """Путь к файлу из assets.
+
+    В сборке PyInstaller файлы распаковываются во временную папку, её адрес
+    лежит в sys._MEIPASS. При запуске из исходника берём корень проекта.
+    """
+    base = getattr(sys, '_MEIPASS', None)
+    if not base:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, 'assets', name)
+
+
+def apply_icon(root: tk.Misc) -> None:
+    """Поставить значок окна.
+
+    Значок исполняемого файла задаётся при сборке, но окно Tk по умолчанию
+    показывает своё перо, поэтому его задаём отдельно. Неудача не важна:
+    окно останется со стандартным значком.
+    """
+    ico = resource_path('icon.ico')
+    if os.path.isfile(ico):
+        try:
+            root.iconbitmap(default=ico)
+            return
+        except tk.TclError:
+            pass
+    png = resource_path('icon.png')
+    if os.path.isfile(png):
+        try:
+            image = tk.PhotoImage(file=png)
+            root.iconphoto(True, image)
+            # Ссылку надо сохранить, иначе сборщик мусора уберёт картинку.
+            root._icon = image  # type: ignore[attr-defined]
+        except tk.TclError:
+            pass
+
+
+def window_title() -> str:
+    return '{} {}'.format(i18n.t('app.title'), __version__)
 
 
 def _enable_dpi_awareness() -> None:
@@ -208,7 +249,7 @@ class CounterApp(object):
     # --- построение окна ---
 
     def _build(self) -> None:
-        self.master.title(i18n.t('app.title'))
+        self.master.title(window_title())
         self.master.minsize(960, 520)
         root = ttk.Frame(self.master, padding=10)
         root.pack(fill='both', expand=True)
@@ -454,7 +495,7 @@ class CounterApp(object):
         Замечания и расхождения хранятся ключами, а не готовыми строками,
         поэтому перечитывать файлы не нужно — достаточно перерисовать.
         """
-        self.master.title(i18n.t('app.title'))
+        self.master.title(window_title())
         self.box_shift.configure(text=i18n.t('ui.shift'))
         self.btn_choose.configure(text=i18n.t('ui.choose_dir'))
         self.btn_reload.configure(text=i18n.t('ui.reload'))
@@ -731,6 +772,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     _enable_dpi_awareness()
     root = tk.Tk()
+    apply_icon(root)
     try:
         ttk.Style().theme_use('vista')
     except tk.TclError:
