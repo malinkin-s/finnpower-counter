@@ -1,30 +1,32 @@
-# Учёт готовности деталей на станке ЧПУ
+# CNC Part Completion Tracker
 
 <img src="assets/icon.png" width="96" align="right" alt="">
 
-> **Черновик.** Скриншоты и английская версия — в работе.
+**English** · [Русский](README.ru.md)
 
-Утилита сводит баланс изготовленных деталей по сменному заданию станка
-с ЧПУ: читает файлы управляющих программ, считает тираж каждой позиции
-и показывает, какие позиции закрыты полностью, а какие ещё будут резаться.
+A shop-floor utility that tells a CNC punching machine operator which
+positions of a shift task are already complete and which are still being cut.
+It reads the NC program files, works out how many pieces of each part the
+shift produces, and tracks what has been made so far.
 
-Работает только на чтение. Файлы программ не изменяются, стойка станка
-не затрагивается.
+Read-only. Program files are never modified and the machine control is not
+touched.
 
-<!-- TODO: скриншот окна с рассчитанной сменой -->
+![Parts view](docs/screenshots/by-part.png)
 
 ---
 
-## Задача
+## The problem
 
-Заказ на пробивку — это не конвейер. В одном сменном задании идут разнородные
-детали, каждая в своём количестве. Чтобы не гонять дорогой лист ради одной
-позиции, CAM-система раскладывает разные детали на общих листах.
+A punching order is not a production line. One shift task contains many
+different parts in different quantities. To avoid wasting expensive sheet
+metal on a single position, the CAM system nests different parts onto shared
+sheets.
 
-Из-за этого одна позиция выходит частями на протяжении всей смены. Например,
-20 штук одной детали режутся так:
+As a result a single position comes out in pieces across the whole shift.
+For example, 20 pieces of one part are cut like this:
 
-| Программа | Штук |
+| Program | Pieces |
 |---|---|
 | PRG_04 | 2 |
 | PRG_05 | 2 |
@@ -33,248 +35,253 @@
 | PRG_27 | 2 |
 | PRG_28 | 5 |
 
-Позиция закрывается полностью только на 28-й программе из 30.
+The position is only closed on the 28th program out of 30.
 
-Оператору нужно знать текущий баланс: что уже готово на 100 %, а что ещё
-в работе. Вручную это делается стикерами на поддонах или пометками в стопке
-распечатанных карт наладки, с калькулятором. При пересменке такой учёт
-рассыпается: металл лежит вперемешку, и сменщик не понимает, какие позиции
-закрыты.
+The operator needs the current balance: what is 100 % done and what is still
+in progress. By hand this means sticky notes on pallets, or pen marks across
+a stack of printed setup reports, plus a desk calculator. At shift handover
+that falls apart: the metal is mixed up on pallets and the incoming operator
+cannot tell which positions are closed.
 
-Следующий процесс при этом не может принимать детали частями — любая
-дальнейшая обработка требует переналадки оснастки. Некомплект означает
-простой смежного оборудования.
-
-<!-- TODO: скриншот или схема сравнения ручного учёта и расчёта -->
+Meanwhile the next process cannot accept parts in batches — any further
+operation needs a tooling changeover. An incomplete set means idle equipment
+downstream.
 
 ---
 
-## Как считает
+## How it counts
 
-Логика простая и проверяется вручную:
+The logic is simple and can be checked by hand:
 
-1. В программе объявлено число листов — `SHEET_COUNT`.
-2. Для каждой детали на листе объявлено количество — `QUANTITY`.
-   Одна деталь может лежать в нескольких блоках `PART_DATA` одного файла,
-   количества складываются.
-3. Тираж в программе = листы × количество на листе.
-4. Служебные контуры (`SCRAP`) в учёт не идут.
-5. По всем программам смены считается общий тираж позиции и **крайняя
-   программа**, в которой она встречается. Это точка её стопроцентной
-   готовности.
+1. The program declares the number of sheets — `SHEET_COUNT`.
+2. Each part on the sheet declares a quantity — `QUANTITY`. One part may
+   appear in several `PART_DATA` blocks of the same file; the quantities are
+   summed.
+3. Pieces in this program = sheets × quantity per sheet.
+4. Scrap contours (`SCRAP`) are ignored.
+5. Across the shift the utility totals each position and records the **last
+   program** it appears in. That is the point where the position reaches
+   100 %.
 
-Порядок выполнения задаёт естественная сортировка имён файлов, после чего
-программам раздаются места в задании: 1, 2, 3 и так далее. Числу, выдернутому
-из имени, доверять нельзя — см. раздел о настройке.
+Execution order comes from a natural sort of the file names; the programs are
+then numbered by their place in the task. The number embedded in a file name
+cannot be trusted — see the configuration section.
 
-Оператор отмечает выполненные программы галочками в режиме «по программам»:
-щелчок отмечает одну, щелчок с Shift — все до неё включительно. Отметки
-хранятся набором, а не одним числом, потому что программы не всегда идут
-подряд. Таблица позиций сразу показывает, что закрыто полностью, а что ещё
-в работе.
+The operator ticks off completed programs in the "by program" view: a click
+marks one, Shift+click marks everything up to it. Completions are stored as a
+set rather than a single number, because programs are not always run in
+order.
 
-В консоли то же самое задаётся ключом `--done`: местом в задании или именем
-программы.
+![Programs view](docs/screenshots/by-program.png)
 
-### Самопроверка
+Double-clicking a position opens a window showing where it is cut, how many
+per program and the running total. Double-clicking a program opens its setup
+report.
 
-Рядом с каждой программой лежит отчёт наладки `.fms` — те же числа,
-записанные независимо и в двух видах: секция `#RSCUT` даёт сумму по детали,
-секция `#COMPONENTS` — разбивку по блокам.
+### Self-check
 
-Утилита сверяет все три источника и показывает результат в окне. Если
-расхождение есть, оператор видит его, а не получает молча неверный баланс.
+Next to each program sits a setup report `.fms` — the same numbers recorded
+independently and in two forms: the `#RSCUT` section gives the total per part,
+the `#COMPONENTS` section the per-block breakdown.
 
----
-
-## Совместимость
-
-Проверено на выходе постпроцессора **NCeXpress FMS** для координатно-пробивного
-станка Prima Power / Finn-Power. Разбирается 30 программ реального сменного
-задания, расхождений с отчётами наладки нет.
-
-Про другое оборудование честно: **не проверялось и не известно.**
-
-Формат задаёт постпроцессор, а не станок. Если ваш цех использует тот же
-NCeXpress, файлы, скорее всего, будут такими же. Другой постпроцессор — другой
-синтаксис, и утилита его не поймёт, пока не настроите.
-
-Никаких обещаний вида «подойдёт для лазера, плазмы и фрезера» здесь нет.
-Подойдёт или нет — решается открытием вашего файла в текстовом редакторе.
-
-### Настройка под свой станок
-
-Весь машинно-зависимый разбор собран в одном месте —
-[`finnpower_counter/core/syntax.py`](finnpower_counter/core/syntax.py),
-в объекте `MachineSyntax`. Там лежат регулярные выражения для числа листов,
-блока детали, имени и количества, а также список служебных контуров
-и кодировок.
-
-Чтобы приспособить утилиту, соберите свой `MachineSyntax` — остальной код
-не меняется.
-
-Несколько мест, на которых наивный разбор ломается, и которые стоит учесть
-при настройке:
-
-- **Имя `SHEET_COUNT` встречается в файле дважды.** Второй раз — в условии
-  перехода `IF (SHEET_COUNT > R400) ... GOTOB MAIN` в конце программы.
-  Это не объявление. Регулярка привязана к началу строки.
-- **Одна деталь лежит в нескольких блоках** одного файла. Количества надо
-  складывать, а не перезаписывать. В тестовом задании это 18 файлов из 30.
-- **Порядок программ нельзя брать ни из алфавита, ни из числа в имени.**
-  По алфавиту `PRG_10` встаёт перед `PRG_9`. А если брать последнюю группу
-  цифр, то на именах вида `000101zz201001` — дата плюс код плюс номер —
-  последовательность получается ни возрастающей, ни уникальной: программы
-  разных дат дают одинаковый хвост. Используется естественная сортировка
-  имени: числовые куски сравниваются как числа. Она разбирает все три
-  случая — с ведущими нулями, без них и с датой в имени.
-- **Кодировка выбирается по осмысленности текста.** Однобайтовые кодировки
-  принимают почти любой байт, поэтому правило «первая, которая не упала»
-  всегда даёт cp1251.
+The utility compares all three sources and shows the result in the window.
+If anything disagrees, the operator sees it instead of silently getting a
+wrong balance.
 
 ---
 
-## Запуск
+## Compatibility
 
-Нужен Python 3.8 или новее. Внешних зависимостей нет.
+Verified against output of the **NCeXpress FMS** postprocessor for a
+Prima Power / Finn-Power punching machine. A real 30-program shift task
+parses with no mismatches against its setup reports; a further 8764 real
+setup reports parse without a single failure.
 
-Окно:
+About other equipment, honestly: **not tested and not known.**
+
+The format is determined by the postprocessor, not by the machine. If your
+shop uses the same NCeXpress, the files are probably the same. A different
+postprocessor means different syntax, and the utility will not understand it
+until it is configured.
+
+There are no promises here about "works for laser, plasma and milling". A
+second machine was tried — an Accure Max with Fanuc-style output — and it
+does not work: those files carry `(SHEETS 1)` and `(PARTS 25)` but **no
+per-part breakdown at all**. No amount of configuration recovers data that is
+not in the file.
+
+A quick way to tell: open your `.nc` in a text editor and look for the sheet
+count and a list of parts with quantities. If both are there, it can be
+configured. If not, it cannot.
+
+### Adapting to another machine
+
+All machine-specific parsing lives in one place —
+[`finnpower_counter/core/syntax.py`](finnpower_counter/core/syntax.py), in the
+`MachineSyntax` object. It holds the regular expressions for sheet count,
+part block, name and quantity, plus the scrap names and the encodings to try.
+
+Build your own `MachineSyntax`; nothing else changes.
+
+A few places where naive parsing breaks, worth knowing when you configure it:
+
+- **`SHEET_COUNT` appears twice in the file.** The second time is inside the
+  jump condition `IF (SHEET_COUNT > R400) ... GOTOB MAIN` at the end of the
+  program. That is not a declaration. The pattern is anchored to the start of
+  a line.
+- **One part sits in several blocks** of the same file. Quantities must be
+  summed, not overwritten. In the test task that is 18 files out of 30.
+- **Program order comes from neither the alphabet nor the number in the
+  name.** Alphabetically `PRG_10` sorts before `PRG_9`. And if you take the
+  last group of digits, then on names like `000101zz201001` — date plus code
+  plus number — the sequence is neither increasing nor unique: programs from
+  different dates share the same tail. On real data that broke the ordering
+  for 22 % of batches. A natural sort of the file name handles all three
+  cases: with leading zeros, without them, and with a date in the name.
+- **The encoding is chosen by how plausible the text looks.** Single-byte
+  encodings accept almost any byte, so "the first one that did not fail"
+  always yields cp1251.
+
+---
+
+## Running
+
+Python 3.8 or newer. No external dependencies.
+
+Window:
 
 ```bash
 python app.py
 ```
 
-Консоль — средство проверки, в релиз не идёт:
+Console — a development aid, not part of the release:
 
 ```bash
-python -m finnpower_counter --dir ПАПКА --done 15 --validate
+python -m finnpower_counter --dir FOLDER --done 15 --validate
 ```
 
-Ключи: `--dir`, `--done`, `--mode {parts,programs}`, `--only {all,done,work}`,
-`--search`, `--sort`, `--desc`, `--validate`, `--json`, `--lang {en,ru}`.
+Options: `--dir`, `--done`, `--mode {parts,programs}`,
+`--only {all,done,work}`, `--search`, `--sort`, `--desc`, `--validate`,
+`--json`, `--report`, `--lang {en,ru}`.
 
-### Язык
+### Language
 
-Русский и английский. Определяется из системы, переключается в окне или
-ключом `--lang`.
+Russian and English. Detected from the system, switchable in the window or
+with `--lang`.
 
-Добавить язык — дописать словарь с теми же ключами
-в [`finnpower_counter/i18n.py`](finnpower_counter/i18n.py). Недостающие ключи
-берутся из английского, поэтому перевод можно вести частями.
+To add a language, add a dictionary with the same keys to
+[`finnpower_counter/i18n.py`](finnpower_counter/i18n.py). Missing keys fall
+back to English, so a translation can be done in parts.
 
-### Сборка
+### Building
 
-Целевая платформа релиза — Windows 7 32-bit, потому что на этой ОС работает
-стойка станка. Последний Python, который на неё ставится, — 3.8.10. Собирать
-надо в той же среде: PyInstaller не кросс-компилирует.
+The release target is Windows 7 32-bit, because that is what the machine
+control runs. The last Python that installs on it is 3.8.10. Build in that
+same environment: PyInstaller does not cross-compile.
 
 ```bash
 pyinstaller app.spec
 ```
 
-Все отличия от значений по умолчанию лежат в [`app.spec`](app.spec), а не
-в ключах командной строки — чтобы сборка воспроизводилась одинаково.
-Собранный файл не требует установки Python и работает без интернета.
+Everything that differs from the defaults lives in [`app.spec`](app.spec)
+rather than in command-line flags, so the build reproduces identically. The
+resulting file needs no Python installation and no internet.
 
-Порядок выпуска, проверка перед релизом и правило нумерации версий —
-в [docs/RELEASE.md](docs/RELEASE.md).
+Release procedure, pre-release checks and the versioning rule are in
+[docs/RELEASE.md](docs/RELEASE.md).
 
-> Исполняемые файлы, собранные PyInstaller в один файл, регулярно вызывают
-> ложные срабатывания антивирусов. Это известное свойство упаковщика,
-> а не признак проблемы с кодом. UPX поэтому отключён, а к выпуску
-> прикладывается контрольная сумма.
+> One-file executables built by PyInstaller regularly trigger false positives
+> in antivirus software. That is a property of the packer, not a sign of a
+> problem with the code. UPX is therefore disabled and a checksum is attached
+> to each release.
 
 ---
 
-## Тесты
+## When something goes wrong
+
+The build uses `--noconsole`, so a traceback would otherwise vanish without
+trace. Instead it is written to a file.
+
+**On a crash** the report is saved automatically, the window shows the path
+and offers to open the folder. The window stays open.
+
+**Without a crash** — the "Save report…" button at the bottom of the window,
+or `--report` on the console. Useful when the numbers disagree but nothing
+has failed.
+
+Where it goes: `%LOCALAPPDATA%\FinnPowerCounter` on Windows,
+`~/.local/share/finnpower-counter` elsewhere. Never next to the executable:
+on a shop-floor machine that folder may be read-only.
+
+![Error report](docs/screenshots/report.png)
+
+### What is in the report
+
+Utility and environment versions, the traceback, the operator's last actions
+and an outline of the shift task: how many programs, sheets, positions and
+pieces in each.
+
+The report is **anonymised by construction**. Program and part designations
+are replaced with `PRG_NN` and `PART_NN`, paths are trimmed to file names.
+The substitution is stable within a report, so it is visible which program
+relates to which, but not what the parts are or whose order it is.
+
+Verified on a real 118-program shift task: none of the 281 plant designations
+made it into the report.
+
+Do not attach `.nc`, `.fms` or setup report files to bug reports — they
+contain plant data, and the report is enough to work from.
+
+---
+
+## Data
+
+Real shop files are not published in this repository. Everything here is
+synthetic, produced by [`tools/make_fixtures.py`](tools/make_fixtures.py).
+
+The generator deliberately reproduces the format quirks listed above,
+including repeated blocks, the second `SHEET_COUNT` occurrence, CRLF line
+endings, single-byte encodings and real-style file names.
 
 ```bash
 python -m pytest tests -q
 ```
 
-Тесты идут на синтетическом задании, которое собирает
-[`tools/make_fixtures.py`](tools/make_fixtures.py). Задание описано явно,
-эталонный свод считается из описания, а не из разбора сгенерированных файлов —
-то есть парсер проверяется независимым путём.
-
-Синтетика намеренно воспроизводит перечисленные выше особенности формата,
-включая повторные блоки, второе вхождение `SHEET_COUNT`, CRLF и разные
-однобайтовые кодировки.
-
-Отдельный набор тестов работает на реальном сменном задании, если папка с ним
-доступна локально; путь задаётся переменной `FINNPOWER_DATASET`. Без папки
-эти тесты пропускаются.
+The expected balance is computed from the task description rather than from
+parsing the generated files, so the parser is checked by an independent path.
+A separate set of tests runs against a real shift task when one is available
+locally; the path is given by `FINNPOWER_DATASET`.
 
 ---
 
-## Если что-то пошло не так
+## Further work
 
-Утилита собирается с ключом `--noconsole`, поэтому при сбое трассировка
-иначе пропала бы бесследно. Вместо этого она сохраняется в файл.
-
-**При падении** отчёт пишется сам, окно показывает путь и предлагает открыть
-папку. Окно при этом не закрывается.
-
-**Без падения** — кнопка «Отчёт о работе…» внизу окна или ключ `--report`
-в консоли. Пригодится, когда цифры расходятся, а ошибки нет.
-
-Куда пишется: `%LOCALAPPDATA%\FinnPowerCounter` на Windows,
-`~/.local/share/finnpower-counter` на остальных системах. Рядом с
-исполняемым файлом отчёт не создаётся: на цеховой машине эта папка может
-быть только для чтения.
-
-### Что внутри отчёта
-
-Версия утилиты и среды, трассировка, последние действия оператора и скелет
-сменного задания: сколько программ, листов, позиций и деталей в каждой.
-
-Отчёт **обезличен по построению**. Обозначения программ и деталей заменены
-на `PRG_NN` и `PART_NN`, пути урезаны до имён файлов. Подстановка устойчива
-в пределах отчёта, поэтому видно, какая программа с какой связана, но не
-видно, что это за детали и чей заказ.
-
-Проверено на настоящем сменном задании из 118 программ: из 281 заводского
-обозначения в отчёт не попало ни одного.
-
-Сами файлы `.nc`, `.fms` и карты наладки к сообщениям об ошибках прикладывать
-не надо — в них заводские данные, а для разбора хватает отчёта.
-
----
-
-## Данные
-
-Реальные цеховые файлы в репозиторий не выкладываются. Всё, что лежит здесь, —
-синтетика, собранная генератором.
-
-Схемы и скриншоты карт наладки в папке `Схемы/` обезличены: заводские номера
-чертежей, индексы и проприетарная геометрия удалены, имена заменены
-нейтральными индексами.
-
----
-
-## Дальнейшее развитие
-
-Разбор того, какие ещё данные есть в файлах станка, что из них полезно
-оператору и мастеру участка, а что брать не стоит — в отдельном документе:
+An analysis of what else the machine files contain, what is actually useful
+to an operator or a shift supervisor and what is not worth taking, is in
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
----
-
-## Лицензия
-
-[MIT](LICENSE). Пользуйтесь, меняйте, собирайте под своё оборудование.
-
-Программа поставляется как есть, без каких-либо гарантий. Ответственность
-за верность учёта на конкретном производстве лежит на том, кто её применяет.
+Research into reading completion straight from the machine control software
+instead of ticking programs by hand is in
+[docs/POWERLINK.md](docs/POWERLINK.md).
 
 ---
 
-## Оговорка
+## License
 
-Проект неофициальный и не связан с Prima Power, Finn-Power или разработчиками
-NCeXpress. Названия оборудования и программного обеспечения приведены
-исключительно для описания формата файлов и принадлежат их владельцам.
+[MIT](LICENSE). Use it, change it, build it for your own equipment.
 
-Утилита не управляет станком, не изменяет траектории реза и не вмешивается
-в работу стойки. Это вспомогательный инструмент учёта, работающий с копиями
-текстовых файлов.
+The software is provided as is, without warranty of any kind. Responsibility
+for the correctness of accounting at a particular plant lies with whoever
+applies it.
+
+---
+
+## Disclaimer
+
+This project is unofficial and not affiliated with Prima Power, Finn-Power or
+the developers of NCeXpress. Equipment and software names are used solely to
+describe the file format and belong to their respective owners.
+
+The utility does not control the machine, does not alter cutting paths and
+does not interfere with the machine control. It is an auxiliary accounting
+tool that works on copies of text files.
