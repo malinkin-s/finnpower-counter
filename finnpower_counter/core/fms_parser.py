@@ -43,10 +43,6 @@ def parse_text(text: str,
     else:
         sheet_count = int(match.group(1))
 
-    def dimension(pattern) -> Optional[float]:
-        found = pattern.search(text)
-        return float(found.group(1)) if found else None
-
     parts: Dict[str, int] = {}
     rscut = _section(text, FMS_SECTIONS['rscut'])
     for part, qty in syntax.fms_rscut_part.findall(rscut):
@@ -63,8 +59,8 @@ def parse_text(text: str,
         name=name,
         path=path,
         sheet_count=sheet_count,
-        sheet_x=dimension(syntax.fms_sheet_x),
-        sheet_y=dimension(syntax.fms_sheet_y),
+        sheet_x=reader.search_float(syntax.fms_sheet_x, text),
+        sheet_y=reader.search_float(syntax.fms_sheet_y, text),
         parts_per_sheet=parts,
         warnings=warnings,
     )

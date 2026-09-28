@@ -79,11 +79,6 @@ def status_for(summary: ShiftSummary,
     return statuses
 
 
-def status_at(summary: ShiftSummary, done: Optional[int]) -> List[PartStatus]:
-    """Состояние позиций, когда выполнены все программы по место done."""
-    return status_for(summary, positions_upto(summary, done))
-
-
 def resolve_position(summary: ShiftSummary, text: str) -> Optional[int]:
     """Понять, какую программу назвал оператор.
 
@@ -103,7 +98,8 @@ def resolve_position(summary: ShiftSummary, text: str) -> Optional[int]:
         return None
 
     places = summary.positions
-    if text.isdigit():
+    # isdecimal, а не isdigit: «²» — digit, но int() на нём падает.
+    if text.isdecimal():
         place = int(text)
         if place in places:
             return place
@@ -121,10 +117,14 @@ def resolve_position(summary: ShiftSummary, text: str) -> Optional[int]:
             'text': text,
             'names': ', '.join(n.name for n in partial[:4])}))
 
-    if text.isdigit() and places and int(text) > max(places):
+    if text.isdecimal() and places and int(text) > max(places):
         return max(places)
 
     raise ValueError(Note('done.unknown', {'text': text}))
+
+
+def _is_unreadable(nest: ProgramNest) -> bool:
+    return any(note.key == nc_parser.UNREADABLE for note in nest.warnings)
 
 
 def cross_check(programs: List[ProgramNest],
@@ -138,11 +138,16 @@ def cross_check(programs: List[ProgramNest],
 
     for nest in programs:
         report = fms_parser.find_report(nest.path, syntax) if nest.path else None
-        if report is None:
+        if report is None or _is_unreadable(nest):
             result.skipped += 1
             continue
 
-        text, _ = reader.read_text(report, syntax)
+        try:
+            text, _ = reader.read_text(report, syntax)
+        except OSError:
+            # Нечитаемый отчёт — то же, что отсутствующий: сверять не с чем.
+            result.skipped += 1
+            continue
         from_rscut = fms_parser.parse_text(
             text, name=nest.name, path=report, number=nest.number, syntax=syntax)
         from_components = fms_parser.parse_components(text, syntax)

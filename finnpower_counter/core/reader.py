@@ -86,6 +86,12 @@ def read_text(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> Tuple[str, s
     return decode(raw, syntax)
 
 
+def search_float(pattern, text: str) -> Optional[float]:
+    """Первое число по шаблону или None. Для габаритов листа в .nc и .fms."""
+    found = pattern.search(text)
+    return float(found.group(1)) if found else None
+
+
 def find_sibling(path: str, suffixes: Tuple[str, ...]) -> Optional[str]:
     """Найти рядом с файлом однофамильца с другим расширением.
 

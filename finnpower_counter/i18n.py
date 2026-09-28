@@ -78,6 +78,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'warn.only_scrap': 'only scrap contours in this program, no parts',
         'warn.encoding': 'file was read as {encoding}',
         'warn.no_programs': 'no program files in folder ({suffixes})',
+        'warn.unreadable': 'file could not be read ({error}) — left out of the count',
         'warn.fms_no_sheets': 'report has no NUMBER OF SHEETS',
         'warn.fms_no_section': 'report has no {section} section',
 
@@ -225,6 +226,7 @@ CATALOGS: Dict[str, Dict[str, str]] = {
         'warn.only_scrap': 'в программе только служебные контуры, деталей нет',
         'warn.encoding': 'файл прочитан как {encoding}',
         'warn.no_programs': 'в папке нет файлов программ ({suffixes})',
+        'warn.unreadable': 'файл не удалось прочитать ({error}) — в расчёт не взят',
         'warn.fms_no_sheets': 'в отчёте нет NUMBER OF SHEETS',
         'warn.fms_no_section': 'в отчёте нет секции {section}',
 

@@ -148,7 +148,7 @@ def filter_programs(programs: Iterable[ProgramNest],
         result = [p for p in result if p.position not in places]
     if search:
         needle = search.strip().lower()
-        if needle.isdigit() and any(p.position == int(needle) for p in result):
+        if needle.isdecimal() and any(p.position == int(needle) for p in result):
             place = int(needle)
             result = [p for p in result if p.position == place]
         elif needle:

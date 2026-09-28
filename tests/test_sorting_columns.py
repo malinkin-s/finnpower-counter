@@ -10,7 +10,7 @@ from finnpower_counter.core import balance
 # --- сортировка позиций ---
 
 def test_по_умолчанию_по_артикулу(shift_ok):
-    statuses = balance.status_at(shift_ok, 9)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 9))
     got = presentation.sort_statuses(statuses)
     assert [s.part for s in got] == sorted(s.part for s in statuses)
 
@@ -21,34 +21,34 @@ def test_по_умолчанию_по_артикулу(shift_ok):
     ('col.last_program', 'last_position'),
 ])
 def test_числовые_колонки_сортируются_как_числа(shift_ok, column, attr):
-    statuses = balance.status_at(shift_ok, 9)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 9))
     values = [getattr(s, attr) for s in presentation.sort_statuses(statuses, column)]
     assert values == sorted(values)
 
 
 def test_обратный_порядок(shift_ok):
-    statuses = balance.status_at(shift_ok, 9)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 9))
     values = [s.total for s in presentation.sort_statuses(statuses, 'col.total', True)]
     assert values == sorted(values, reverse=True)
 
 
 def test_крайняя_упорядочивается_по_месту_а_не_по_имени(shift_ok):
     """В ячейке имя программы, а порядок должен быть по месту в задании."""
-    statuses = balance.status_at(shift_ok, 12)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 12))
     got = presentation.sort_statuses(statuses, 'col.last_program')
     assert [s.last_position for s in got] == sorted(s.last_position for s in statuses)
 
 
 def test_равные_значения_упорядочены_устойчиво(shift_ok):
     """Иначе строки с одинаковым тиражом прыгают при каждой перерисовке."""
-    statuses = balance.status_at(shift_ok, 9)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 9))
     first = presentation.sort_statuses(statuses, 'col.status')
     second = presentation.sort_statuses(list(reversed(statuses)), 'col.status')
     assert [s.part for s in first] == [s.part for s in second]
 
 
 def test_сортировка_не_теряет_и_не_плодит_строки(shift_ok):
-    statuses = balance.status_at(shift_ok, 9)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 9))
     for column in list(presentation.PART_SORT_KEYS) + [None]:
         got = presentation.sort_statuses(statuses, column)
         assert sorted(s.part for s in got) == sorted(s.part for s in statuses)
@@ -136,8 +136,8 @@ def test_произвольный_набор_считается_верно(shift
 
 
 def test_набор_и_номер_дают_одно_и_то_же(shift_ok):
-    by_number = balance.status_at(shift_ok, 7)
-    by_set = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 7))
+    by_number = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 7))
+    by_set = balance.status_for(shift_ok, set(range(1, 8)))
     assert by_number == by_set
 
 
