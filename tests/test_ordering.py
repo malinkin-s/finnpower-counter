@@ -85,7 +85,7 @@ def test_сверка_с_отчётами_проходит(realistic):
     (None, 0), (1, 1), (2, 2), (7, 3), (9, 7), (11, 11), (12, 14),
 ])
 def test_готовность_по_ходу_смены_не_зависит_от_имён(realistic, done, complete):
-    statuses = balance.status_at(realistic, done)
+    statuses = balance.status_for(realistic, balance.positions_upto(realistic, done))
     assert sum(1 for s in statuses if s.is_complete) == complete
 
 

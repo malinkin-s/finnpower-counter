@@ -29,7 +29,6 @@ from .core.syntax import DEFAULT_SYNTAX
 # Экран у стойки смотрят стоя и не вплотную — шрифт крупнее обычного.
 FONT = ('Segoe UI', 10)
 FONT_BOLD = ('Segoe UI', 10, 'bold')
-FONT_BIG = ('Segoe UI', 11)
 
 COLOR_DONE_BG = '#d8f0d8'
 COLOR_DONE_FG = '#14521a'
@@ -231,7 +230,6 @@ class CounterApp(object):
         self.var_only = tk.StringVar(value=presentation.ONLY_ALL)
         self.var_mode = tk.StringVar(value=presentation.MODE_PARTS)
         self.var_counters = tk.StringVar(value=i18n.t('counters.empty'))
-        self.var_lang = tk.StringVar(value=i18n.current())
         self.var_check = tk.StringVar(value='')
         self.var_hint = tk.StringVar(value='')
 
@@ -399,10 +397,7 @@ class CounterApp(object):
     # --- отчёты ---
 
     def _save_report(self, exc_info=None) -> Optional[str]:
-        path = report.save(self.summary, exc_info, self.actions)
-        if path is None:
-            return None
-        return path
+        return report.save(self.summary, exc_info, self.actions)
 
     def _on_report(self) -> None:
         """Кнопка «Отчёт о работе»: снимок состояния без всякой аварии."""
@@ -559,12 +554,16 @@ class CounterApp(object):
                        or i18n.t('dlg.no_programs_plain')))
             return
 
+        # Сверка до смены состояния: если она упадёт, окно останется на
+        # прежнем задании целиком, а не на новом с отметками от старого.
+        check = balance.cross_check(summary.programs, DEFAULT_SYNTAX)
+
         # Открытые окна позиций относятся к прежнему заданию.
         self._close_detail_windows()
 
         self.directory = directory
         self.summary = summary
-        self.check = balance.cross_check(summary.programs, DEFAULT_SYNTAX)
+        self.check = check
         self.done_positions = set()
         self.sort_column = None
         self.sort_reverse = False

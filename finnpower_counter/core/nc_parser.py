@@ -8,6 +8,10 @@ from . import reader
 from .model import Note, ProgramNest
 from .syntax import DEFAULT_SYNTAX, MachineSyntax
 
+# Ключ замечания о нечитаемом файле. По нему сверка понимает, что сравнивать
+# не с чем.
+UNREADABLE = 'warn.unreadable'
+
 
 def parse_text(text: str,
                name: str,
@@ -26,10 +30,6 @@ def parse_text(text: str,
         sheet_count = int(match.group(1))
         if sheet_count == 0:
             warnings.append(Note('warn.zero_sheets'))
-
-    def dimension(pattern) -> Optional[float]:
-        found = pattern.search(text)
-        return float(found.group(1)) if found else None
 
     parts = {}
     blocks = syntax.part_block.findall(text)
@@ -57,8 +57,8 @@ def parse_text(text: str,
         name=name,
         path=path,
         sheet_count=sheet_count,
-        sheet_x=dimension(syntax.sheet_x),
-        sheet_y=dimension(syntax.sheet_y),
+        sheet_x=reader.search_float(syntax.sheet_x, text),
+        sheet_y=reader.search_float(syntax.sheet_y, text),
         parts_per_sheet=parts,
         warnings=warnings,
     )
@@ -76,6 +76,18 @@ def parse_file(path: str, syntax: MachineSyntax = DEFAULT_SYNTAX) -> ProgramNest
     return nest
 
 
+def unreadable(path: str, exc: OSError) -> ProgramNest:
+    """Программа, файл которой прочитать не удалось."""
+    return ProgramNest(
+        position=0,
+        number=None,
+        name=os.path.splitext(os.path.basename(path))[0],
+        path=path,
+        sheet_count=None,
+        warnings=[Note(UNREADABLE, {'error': exc.strerror or type(exc).__name__})],
+    )
+
+
 def collect_programs(directory: str,
                      syntax: MachineSyntax = DEFAULT_SYNTAX) -> List[ProgramNest]:
     """Разобрать все программы в папке, в порядке выполнения.
@@ -91,7 +103,13 @@ def collect_programs(directory: str,
             continue
         if os.path.splitext(entry)[1].lower() not in syntax.nc_suffixes:
             continue
-        nests.append(parse_file(path, syntax))
+        try:
+            nests.append(parse_file(path, syntax))
+        except OSError as exc:
+            # Один заблокированный или недокопированный файл не повод не
+            # открывать смену. Программа остаётся на своём месте в задании,
+            # но в расчёт не идёт, а оператор видит замечание.
+            nests.append(unreadable(path, exc))
 
     nests.sort(key=lambda n: reader.natural_key(n.path or n.name))
     for place, nest in enumerate(nests, start=1):

@@ -64,7 +64,7 @@ def test_отбор_и_поиск_вместе():
 
 def test_итоги_считаются_по_всей_смене(shift_ok):
     """Отбор меняет показ, но не баланс."""
-    statuses = balance.status_at(shift_ok, 9)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 9))
     line = presentation.counters(shift_ok, statuses)
     assert 'Готово полностью: 7 из 14' in line
     assert 'Деталей: 95' in line
@@ -120,6 +120,11 @@ def test_csv_пишется_с_bom(tmp_path):
 
 
 def test_csv_переживает_полный_свод(shift_ok):
-    statuses = balance.status_at(shift_ok, 12)
+    statuses = balance.status_for(shift_ok, balance.positions_upto(shift_ok, 12))
     rows = list(csv.reader(io.StringIO(presentation.to_csv(statuses)), delimiter=';'))
     assert len(rows) == 1 + shift_ok.unique_parts
+
+
+def test_надстрочная_цифра_в_поиске_программ(shift_ok):
+    """«²» — isdigit, но int() на нём падает; поиск должен просто не найти."""
+    assert presentation.filter_programs(shift_ok.usable_programs, search='²') == []

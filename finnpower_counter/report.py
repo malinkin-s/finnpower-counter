@@ -27,10 +27,19 @@ APP_DIR_NAME = 'FinnPowerCounter'
 FILE_PREFIX = 'report'
 
 # Пути: и виндовые, и юниксовые. Оставляем только имя файла.
-_WINDOWS_PATH = re.compile(r'[A-Za-z]:\\[^\s"\'<>|]+')
+# Виндовый путь тянется до кавычки или конца строки, а не до пробела: в именах
+# папок пробелы обычны («Ivan Petrov», «Общая папка»), и обрыв на пробеле
+# оставлял в отчёте хвост пути вместе с фамилией. Лишнее съеденное после пути
+# безвредно, недосъеденное — утечка.
+_WINDOWS_PATH = re.compile(r'[A-Za-z]:\\[^"\'<>|\r\n]+')
 _POSIX_PATH = re.compile(r'/(?:[\w.\- ]+/)+[\w.\-]+')
 # Сетевые папки вида \\SERVER\SHARE\...
-_UNC_PATH = re.compile(r'\\\\[^\s"\'<>|]+')
+_UNC_PATH = re.compile(r'\\{2,}[^\s\\"\'<>|]+\\[^"\'<>|\r\n]*')
+
+# Имена файлов, которые можно оставить: исходники утилиты и уже обезличенные
+# PRG_NN / PART_NN. Остальное — имя программы или чертежа, оно заменяется.
+_SAFE_NAME = re.compile(r'^(?:[\w\-]+\.pyw?|(?:PRG|PART)_\d+(?:\.\w+)?)$')
+_EXTENSION = re.compile(r'\.[A-Za-z0-9]{1,5}$')
 
 
 class Scrubber:
@@ -64,14 +73,22 @@ def scrub_paths(text: str) -> str:
 
     Путь выдаёт и предприятие, и фамилию пользователя, и структуру сети.
     Для разбора ошибки достаточно имени файла.
+
+    Само имя тоже может выдать заводское обозначение: если отчёт собирается
+    без задания, подстановке PRG_NN не из чего строиться. Поэтому имя
+    остаётся, только если оно заведомо безопасно, иначе от него остаётся
+    расширение: FILE.nc.
     """
     def keep_name(match: 're.Match') -> str:
         raw = match.group(0)
         name = re.split(r'[\\/]', raw)[-1]
+        if name and not _SAFE_NAME.match(name):
+            extension = _EXTENSION.search(name)
+            name = 'FILE' + (extension.group(0) if extension else '')
         return '...' + ('/' + name if name else '')
 
-    text = _UNC_PATH.sub(keep_name, text)
     text = _WINDOWS_PATH.sub(keep_name, text)
+    text = _UNC_PATH.sub(keep_name, text)
     return _POSIX_PATH.sub(keep_name, text)
 
 
