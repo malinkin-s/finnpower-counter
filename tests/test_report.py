@@ -142,3 +142,36 @@ def test_запись_в_недоступную_папку_не_роняет(shi
 def test_папка_отчётов_доступна_на_запись():
     path = report.reports_dir()
     assert os.path.isdir(path) and os.access(path, os.W_OK)
+
+
+# --- пути с пробелами и имена файлов ---
+
+@pytest.mark.parametrize('line', [
+    'File "C:\\Users\\Ivan Petrov\\Desktop\\counter\\gui.py", line 548, in _load',
+    'не найдено: C:\\Цех 2\\Смена Иванова\\PRG_01.pdf',
+    '\\\\CEH-SRV\\Общая папка\\Иванов И.И\\PRG_01.nc',
+    "OSError: '\\\\\\\\CEH-SRV\\\\Общая папка\\\\Иванов И.И\\\\PRG_01.nc'",
+])
+def test_пробел_в_пути_не_оставляет_хвост(line):
+    """Раньше путь обрывался на первом пробеле, и фамилия уходила в отчёт."""
+    text = report.scrub_paths(line)
+    for leaked in ('Petrov', 'Desktop', 'Иванова', 'Иванов', 'Общая', 'CEH-SRV'):
+        assert leaked not in text
+
+
+def test_имя_программы_в_пути_заменяется_и_без_задания():
+    """Без задания подстановке PRG_NN не из чего строиться — имя файла
+    из пути всё равно не должно попасть в отчёт."""
+    try:
+        raise PermissionError(13, 'Permission denied',
+                              'C:\\Смена\\000101zz201006.nc')
+    except PermissionError:
+        import sys
+        text = report.build(None, sys.exc_info())
+    assert '000101zz201006' not in text
+    assert 'FILE.nc' in text
+
+
+@pytest.mark.parametrize('name', ['gui.py', '__init__.py', 'PRG_07.nc', 'PART_03'])
+def test_безопасные_имена_файлов_остаются(name):
+    assert name in report.scrub_paths('C:\\CAM\\{}'.format(name))
