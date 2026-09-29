@@ -59,5 +59,8 @@ constrained a decision.
 | PLN-07 | Tk may only be used from the main thread | A background executor is required before any network I/O (S0-03) |
 | PLN-08 | `gui.py` is a single ~790-line module that mixes layout and behaviour | Split it before adding sign-in, setup and other windows (S0-02) |
 | PLN-09 | The previous roadmap stated that the utility "keeps no history and should not" | Reversed on purpose: history is kept on the server. Program files remain read-only |
-| PLN-10 | Recording each operator's output is processing of personal data and may fall under labour and data-protection law | Open question for the shop's management before rollout (see TASKS.md, open questions) |
+| PLN-10 | Recording each operator's output is processing of personal data and may fall under labour and data-protection law | The project is open source and not tied to a shop: it provides retention and visibility settings (S1-09, S6-05), and compliance is the deployer's responsibility, stated in the documentation |
 | PLN-11 | Code comments, docstrings and commit history are in Russian; the repository is now English-first | New code and documents in English; existing comments translated gradually (M-11) |
+| PLN-12 | Infor SyteLine exposes a documented IDO REST API (load, update, invoke per IDO) and ION BODs, but has no public sandbox; cloud access goes through the ION API Gateway | The SyteLine connector is built against a mock (TB-04) and verified on a real instance later (R-01, Q-07) |
+| PLN-13 | 1C:Enterprise can publish a standard OData v3 interface per infobase; 1C teams also commonly pull from external HTTP APIs with their own scheduled jobs | The integration hub supports both: an OData connector and a generic event feed (S8-04, S8-08) |
+| PLN-14 | NC files carry no order or job number (`CUSTOMER` and `Order ID` are empty in the files analysed) | ERP integration needs mapping tables maintained by the administrator (S8-03) |

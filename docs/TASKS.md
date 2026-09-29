@@ -8,8 +8,9 @@ Status of every task: **not started**, unless marked otherwise.
 
 ## Conventions
 
-- **ID** — `S<stage>-<nn>` for the tracking system (stages 0–6), `M-<nn>` for
-  maintenance items from the audit, `D<stage>-<nn>` for machine-data stages A–F.
+- **ID** — `S<stage>-<nn>` for the tracking system (stages 0–8), `R-<nn>` for
+  research, `TB-<nn>` for test benches, `M-<nn>` for maintenance items from
+  the audit, `D<stage>-<nn>` for machine-data stages A–F.
 - **Size** — rough effort: **S** up to a day, **M** two to four days,
   **L** one to two weeks.
 - **Done when** — acceptance criteria. A task is not done until they hold and
@@ -23,6 +24,9 @@ Status of every task: **not started**, unless marked otherwise.
 S0-01 ──► (gate) ──► S1 ──► S2 ──► S3 ──► S4
 S0-02..06 ─────────────────► S2       S3 ──► S5
                                             S6 runs alongside S3–S5
+                     S1 ──► S7 (directory, after R-03)
+                     S3 ──► S8 (integration hub, after R-01/R-02)
+TB-xx: built ahead of the stage that needs them
 M-xx: any time, independent
 ```
 
@@ -159,6 +163,8 @@ in tests.
   stored with the hash.
 - First-run setup: a CLI command `fpc-server create-admin` (no web page
   reachable without an admin).
+- An **authentication provider interface** with one implementation, `local`,
+  so that LDAP (S7-02) plugs in without touching the rest.
 
 **Done when.** Permission checks are covered by tests for every role and
 route; hashes verify and reject correctly.
@@ -182,6 +188,7 @@ rejection.
 - Users: create, change role, block and unblock, set or reset PIN/password.
 - Workstations: create, name, block; generate a one-time registration code
   (short-lived, single use).
+- Operators per workstation: which operators may sign in where.
 
 **Done when.** All actions work through the web page and are recorded in the
 audit log (S1-07).
@@ -219,6 +226,21 @@ supported client version; the OpenAPI description is exported into
 **Done when.** A change to any route shows up as a diff in `openapi.json`.
 
 **Depends on.** S1-01.
+
+### S1-09 System settings · M
+
+**Scope.** An admin page and a settings table for everything the
+administrator configures:
+- shift boundaries (any number of shifts, crossing midnight allowed);
+- time format (24-hour or 12-hour) and date format for pages and exports;
+- data retention period for production events;
+- who may see individual operators' figures (supervisors, admins only, or
+  totals only).
+
+**Done when.** Each setting is applied everywhere it matters and covered by
+tests; changes are audited (S1-07).
+
+**Depends on.** S1-04.
 
 ---
 
@@ -376,12 +398,13 @@ programs, positions, pieces; only the effective event per program counts.
 
 ### S4-02 Shift definition · S
 
-**Scope.** Configurable shift boundaries (e.g. 08:00–20:00, 20:00–08:00) in
-the server settings; events are assigned to a shift by `received_at`.
+**Scope.** Events are assigned to a shift by `received_at`, using the shift
+boundaries configured by the administrator (S1-09).
 
-**Done when.** Night shifts that cross midnight count as one shift.
+**Done when.** Night shifts that cross midnight count as one shift; changing
+the boundaries recomputes the totals.
 
-**Depends on.** Open question Q-02.
+**Depends on.** S1-09.
 
 ### S4-03 Supervisor page · M
 
@@ -397,7 +420,8 @@ reload.
 ### S4-04 CSV export · S
 
 **Scope.** Export of the current page view; `;` separator, UTF-8 with BOM;
-cells starting with `=`, `+`, `-`, `@` are escaped (FND-11).
+dates and times in the configured format (S1-09); cells starting with `=`,
+`+`, `-`, `@` are escaped (FND-11).
 
 **Done when.** The file opens correctly in a Russian-locale Excel; formula
 injection is covered by a test.
@@ -466,6 +490,174 @@ personal data, dependency audit of the server.
 
 **Depends on.** S1–S5.
 
+### S6-05 Data retention · S
+
+**Scope.** A scheduled job removes or anonymises production events older
+than the configured retention period (S1-09); the audit log keeps a record
+of each run.
+
+**Depends on.** S1-09, S3-02.
+
+---
+
+## Stage 7 — Directory (Active Directory)
+
+Design in [INTEGRATIONS.md](INTEGRATIONS.md#active-directory).
+
+### S7-01 LDAP settings · S
+
+**Scope.** Admin page for the directory: server, LDAPS or StartTLS, CA
+certificate, service account (stored as a secret), base DN, user filter;
+**Test connection** button.
+
+**Depends on.** R-03, S1-09.
+
+### S7-02 LDAP authentication provider · M
+
+**Scope.** Supervisor and administrator sign-in with domain credentials via
+`ldap3`; a user record is created on first sign-in; local accounts keep
+working, at least one local administrator always remains.
+
+**Done when.** Sign-in works against the bench domain (TB-03); wrong
+password and disabled domain accounts are rejected.
+
+**Depends on.** S1-03, S7-01.
+
+### S7-03 Group → role mapping · S
+
+**Scope.** Admin table mapping domain groups to roles; roles re-evaluated at
+every sign-in; removing a user from the group removes access.
+
+**Depends on.** S7-02.
+
+### S7-04 Link operators to domain accounts · S
+
+**Scope.** Optional link between an operator record and a domain account for
+identity and ERP employee mapping; sign-in at the machine stays name + PIN.
+
+**Depends on.** S7-02.
+
+### S7-05 Browser single sign-on · M · optional
+
+**Scope.** Kerberos/SPNEGO sign-in for the web pages on domain-joined PCs.
+
+**Depends on.** S7-02.
+
+---
+
+## Stage 8 — Integration hub
+
+Design in [INTEGRATIONS.md](INTEGRATIONS.md#integration-hub).
+
+### S8-01 Hub core · L
+
+**Scope.** Connector registry (built-ins plus the `fpc_server.connectors`
+entry-point group); connection profiles; settings models rendered as admin
+forms with validation and **Test connection**; secrets encrypted with the
+server master key; enable, disable, delete.
+
+**Done when.** A dummy connector installed as a separate package appears in
+the panel, can be configured and tested, and its secrets never appear in
+pages, logs or backups in clear text.
+
+**Depends on.** S1-05, S1-07.
+
+### S8-02 Integration outbox and delivery · M
+
+**Scope.** Outgoing messages stored before delivery; routing by event type
+and filters; retries with back-off; idempotency keys; dead-letter list and
+manual retry; delivery log and a status tile per connection.
+
+**Done when.** With the target down for an hour, messages are delivered
+exactly once afterwards (scenario T-10).
+
+**Depends on.** S8-01, S3-02.
+
+### S8-03 Mapping tables · M
+
+**Scope.** Parts → items, tasks → jobs, operators → employees, workstations
+→ work centres; editing in the panel, CSV import and export, pre-fill from a
+connector's `pull_reference`; an "unmapped" list; messages wait until mapped.
+
+**Depends on.** S8-01.
+
+### S8-04 Integration API · M
+
+**Scope.** Scoped API tokens managed in the panel; event feed by cursor;
+reference-data upload (jobs, items); webhook subscriptions; all documented in
+the OpenAPI description.
+
+**Done when.** An external script can read every event exactly once by
+cursor across restarts.
+
+**Depends on.** S1-08, S3-02.
+
+### S8-05 Webhook connector · S
+
+**Scope.** POST to a configurable URL with an admin-edited payload template
+and preview; authentication methods from INTEGRATIONS.md.
+
+**Depends on.** S8-02.
+
+### S8-06 File-drop connector · S
+
+**Scope.** CSV or XML files written to a configured folder, one per batch,
+atomically; optional import of reference data from files.
+
+**Depends on.** S8-02, S8-03.
+
+### S8-07 Infor SyteLine connector · L
+
+**Scope.** Pull jobs, routings and items through the IDO REST API; push
+completed quantities as job transactions per job operation; on-premises
+token and ION API (`.ionapi`) authentication.
+
+**Done when.** Scenario T-09 passes against ERP-MOCK; verified against a real
+instance when one is available.
+
+**Depends on.** R-01, S8-02, S8-03, TB-04.
+
+### S8-08 1C OData connector · L
+
+**Scope.** Read catalogs (items, employees) and create production-output
+documents through the published OData interface; which document is agreed
+per site.
+
+**Depends on.** R-02, S8-02, S8-03.
+
+### S8-09 Connector developer guide · S
+
+**Scope.** `docs/CONNECTORS.md`: the interface, settings models, testing
+against the bench, packaging as a plugin; an example connector in the
+repository.
+
+**Depends on.** S8-01.
+
+---
+
+## Research
+
+| ID | Size | Question | Output |
+|---|---|---|---|
+| R-01 | M | Infor SyteLine: confirm IDO names and properties for jobs, routings, items and job transactions; authentication on premises and via ION; which transaction the site would use for punching output | A verified section in INTEGRATIONS.md; the ERP-MOCK contract |
+| R-02 | M | 1C: OData publishing, which catalogs and documents carry items, employees and production output in 1C:ERP; how a 1C scheduled job would read our event feed | A verified section in INTEGRATIONS.md |
+| R-03 | S | Active Directory: LDAPS requirements, service account rights, group layout, whether operators have domain accounts | A verified section in INTEGRATIONS.md |
+
+---
+
+## Test benches
+
+Layout and scenarios in [TEST_BENCH.md](TEST_BENCH.md).
+
+| ID | Size | Task | Needed by |
+|---|---|---|---|
+| TB-01 | S | `bench/docker-compose.yml` with profiles per bench configuration; SRV-LIN setup notes | S1 |
+| TB-02 | S | Windows VM checklist `bench/windows.md` (WS-W7, WS-W10, SRV-WIN) | S0-01 |
+| TB-03 | S | Samba AD DC container with test users and groups | S7 |
+| TB-04 | M | ERP-MOCK: IDO REST imitation of jobs, routings, items; records job transactions; built from R-01 | S8-07 |
+| TB-05 | S | Toxiproxy between clients and the server, with scripted fault scenarios | S3 |
+| TB-06 | S | Samba share with synthetic shift folders from `tools/make_fixtures.py` | S2 |
+
 ---
 
 ## Maintenance — from the audit
@@ -509,11 +701,13 @@ reasoning in [ROADMAP.md](ROADMAP.md#more-data-from-the-machine-files).
 
 ## Open questions
 
-| ID | Question | Blocks |
+| ID | Question | Status |
 |---|---|---|
-| Q-01 | Where will the server run on the shop floor, and who maintains it? For development a local VM is enough | S6-02, rollout |
-| Q-02 | Shift boundaries: times, night shift, weekends | S4-02 |
-| Q-03 | How many workstations and operators; do operators move between PCs? | S2-04 (operator list per workstation) |
-| Q-04 | How long to keep production data; who may see individual operators' figures | S4, S6-01 |
-| Q-05 | Recording each operator's output is personal-data processing (PLN-10). Does the shop need operator notice or consent under local law? | Rollout |
-| Q-06 | PIN length and lockout policy (attempts, duration) | S2-04 |
+| Q-01 | Where does the server run? | **Resolved for development:** a local VM (TEST_BENCH.md). Deployment stays site-specific; S6-02 documents Linux and Windows |
+| Q-02 | Shift boundaries | **Resolved:** configured by the administrator, including the time format (S1-09) |
+| Q-03 | Operators and workstations | **Resolved:** configured by the administrator (S1-05) |
+| Q-04 | Retention and visibility of production data | **Resolved:** configured by the administrator (S1-09, S6-05); directory integration likely (stage 7) |
+| Q-05 | Personal data and local law | **Resolved:** the project is open source and not tied to a particular shop. It provides retention and visibility settings; compliance is the responsibility of whoever deploys it, as stated in the documentation |
+| Q-06 | PIN length and lockout policy | Open — default proposed in S2-04, configurable in S1-09 |
+| Q-07 | Access to a real SyteLine instance for verification | Open — until then, ERP-MOCK (TB-04) |
+| Q-08 | Which ERPs besides SyteLine and 1C are worth a built-in connector | Open |

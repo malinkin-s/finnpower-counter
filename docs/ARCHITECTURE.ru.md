@@ -42,6 +42,122 @@
 цеховом компьютере, а браузер его не даёт. Мастеру и администратору ничего
 устанавливать не нужно.
 
+Тестовые стенды — в [TEST_BENCH.md](TEST_BENCH.md) (на английском).
+
+### Целевая система
+
+Как система должна работать после всех этапов: узлы, конкретные решения на
+каждом и связи между ними. Пунктиром — необязательное или поздние этапы.
+Подписи на схемах — на английском, как и в основной версии документа.
+
+```mermaid
+flowchart LR
+  subgraph FLOOR["Shop floor"]
+    CAM["CAM system<br/>NCeXpress FMS"]
+    SHARE[("File share<br/>.nc .fms .pdf")]
+    MACHINE["Punching machine<br/>control"]
+    subgraph WS["Operator workstation<br/>Windows 7+"]
+      CLIENT["Client .exe<br/>Python 3.8 · Tk<br/>core/ parser"]
+      LOCAL[("Outbox + cache<br/>DPAPI")]
+    end
+  end
+
+  subgraph SRV["Server · Linux Docker or Windows service"]
+    HTTP["Uvicorn · TLS<br/>pinned self-signed cert"]
+    API["REST API /api/v1<br/>FastAPI"]
+    SSE["Event stream<br/>SSE"]
+    WEB["Web pages<br/>supervisor · admin"]
+    SVC["Services<br/>auth · roles · production<br/>sessions · settings"]
+    DB[("Database<br/>SQLite WAL<br/>SQLAlchemy · Alembic")]
+    AUTHP["Auth providers<br/>local · LDAP"]
+    subgraph HUB["Integration hub"]
+      REG["Connectors<br/>plugins + settings"]
+      MAP["Mapping<br/>parts to items · tasks to jobs<br/>operators to employees"]
+      OUT["Integration outbox<br/>retries · dead letter · log"]
+      IAPI["Integration API<br/>tokens · event feed"]
+    end
+    BACKUP["Backup job"]
+  end
+
+  subgraph OFFICE["Office"]
+    SUP["Supervisor<br/>browser"]
+    ADM["Administrator<br/>browser"]
+  end
+
+  subgraph ENT["Enterprise systems"]
+    AD["Active Directory"]
+    ERP["Infor SyteLine"]
+    ONEC["1C:Enterprise"]
+    OTHER["Other ERP / MES<br/>webhook · files"]
+    BSTORE[("Backup storage")]
+  end
+
+  CAM -- "writes programs" --> SHARE
+  SHARE -- "programs" --> MACHINE
+  CLIENT -- "SMB read-only" --> SHARE
+  CLIENT --- LOCAL
+  CLIENT -- "HTTPS: sign-in, events" --> HTTP
+  HTTP -- "SSE: live marks" --> CLIENT
+  MACHINE -. "queue, logs · stage F" .-> CLIENT
+
+  HTTP --> API
+  HTTP --> SSE
+  HTTP --> WEB
+  API --> SVC
+  WEB --> SVC
+  SVC --> SSE
+  SVC --> DB
+  SVC --> AUTHP
+  SVC --> OUT
+  REG --> OUT
+  MAP --> OUT
+  IAPI --> SVC
+  BACKUP --> DB
+
+  SUP -- "HTTPS" --> HTTP
+  ADM -- "HTTPS" --> HTTP
+
+  AUTHP -. "LDAPS · stage 7" .-> AD
+  OUT -. "IDO REST / ION · stage 8" .-> ERP
+  OUT -. "OData · stage 8" .-> ONEC
+  OUT -. "webhook, CSV/XML" .-> OTHER
+  ONEC -. "pulls event feed" .-> IAPI
+  BACKUP --> BSTORE
+```
+
+### Одна отметка от начала до конца
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor OP as Operator
+  participant CL as Client
+  participant OB as Client outbox
+  participant API as Server API
+  participant DB as Database
+  participant SSE as Event stream
+  participant SUP as Supervisor page
+  participant INT as Integration worker
+  participant ERP as ERP
+
+  OP->>CL: ticks program PRG_07
+  CL->>OB: store event (UUID, task, program, pieces)
+  CL-->>OP: mark shown at once
+  OB->>API: POST /api/v1/events (batch)
+  API->>DB: insert if UUID is new, set operator, workstation, received_at
+  API-->>OB: accepted — remove from outbox
+  API->>SSE: publish event
+  SSE-->>CL: other workstations update the task
+  SSE-->>SUP: totals update live
+  API->>INT: queue for integration
+  INT->>ERP: job transaction per job operation (idempotency key)
+  ERP-->>INT: ok, or retry later
+```
+
+Если сервер недоступен, шаги 4–11 ждут в очереди клиента; если недоступна
+ERP, шаги 12–13 ждут в очереди интеграции. Ни то, ни другое не мешает
+оператору.
+
 ---
 
 ## Почему сервер, а не общая сетевая папка
@@ -256,6 +372,26 @@ Tk можно трогать только из главного потока, а
   с цехового компьютера, их не прочитать на другом.
 - Если два оператора без связи отметили одно и то же, действует порядок
   приёма сервером, а мастер видит такие отметки помеченными.
+
+---
+
+## Интеграции
+
+Два вида, оба на сервере и оба настраивает администратор:
+
+- **Каталог (этап 7).** Интерфейс поставщиков входа с реализациями `local`
+  и `ldap`: мастер и администратор входят под учётными записями Active
+  Directory, роли следуют доменным группам. Операторы у станка входят
+  по имени и PIN.
+- **Интеграционный модуль (этап 8).** ERP и другие системы подключаются
+  через коннекторы-модули, настраиваемые в панели администратора: профили
+  подключений, зашифрованные секреты, маршрутизация событий, таблицы
+  сопоставления, очередь интеграции с повторами и журналом доставки, API
+  интеграции для систем, которые предпочитают забирать данные сами
+  (типично для 1С).
+
+Подробности и исследование — [INTEGRATIONS.md](INTEGRATIONS.md) (на
+английском).
 
 ---
 

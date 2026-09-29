@@ -5,10 +5,12 @@
 Two directions:
 
 1. **Production tracking system** — a server with a database, role-based
-   sign-in, a production log, saved sessions, a supervisor web page. The
-   utility becomes the client at the operator's workstation. Stages 0–6
-   below; architecture in [ARCHITECTURE.md](ARCHITECTURE.md); task breakdown
-   in [TASKS.md](TASKS.md).
+   sign-in, a production log, saved sessions, a supervisor web page,
+   directory and ERP integration. The utility becomes the client at the
+   operator's workstation. Stages 0–8 below; architecture in
+   [ARCHITECTURE.md](ARCHITECTURE.md); integrations in
+   [INTEGRATIONS.md](INTEGRATIONS.md); test benches in
+   [TEST_BENCH.md](TEST_BENCH.md); task breakdown in [TASKS.md](TASKS.md).
 2. **More data from the machine files** — which other fields are useful to
    an operator or a supervisor and which are not worth taking. Stages A–F.
    Based on the output of the NCeXpress FMS postprocessor.
@@ -18,6 +20,10 @@ and the system decides where and to whom they are shown.
 
 Status of everything below: **planned, not implemented.** Findings that
 shaped this plan are in [FINDINGS.md](FINDINGS.md).
+
+The project is open source and not tied to a particular shop. Everything
+site-specific — shifts, operators, retention, directory, ERP — is configured
+by the administrator.
 
 ---
 
@@ -36,6 +42,9 @@ shaped this plan are in [FINDINGS.md](FINDINGS.md).
 | 7 | Supervisor views production and writes nothing | web | 4 |
 | 8 | Production export to CSV | web | 4 |
 | 9 | Clients work concurrently, changes show up immediately | server + client | 3, 4 |
+| 10 | Administrator settings: shifts, time format, retention, visibility | server | 1 |
+| 11 | Sign-in with Active Directory accounts, roles from groups | server | 7 |
+| 12 | Integration hub: pluggable, configurable ERP connectors (SyteLine, 1C, webhook, files) and an API for ERPs to read from | server | 8 |
 
 ### Decisions
 
@@ -54,6 +63,10 @@ shaped this plan are in [FINDINGS.md](FINDINGS.md).
 - **A session is a named bookmark**; the production log is the single source
   of truth about marks.
 - **Standalone mode stays**: without a server the utility works as today.
+- **Site-specific settings belong to the administrator**: shift boundaries,
+  time format, operators per workstation, retention, visibility.
+- **Integrations are plugins** configured in the admin panel, never
+  hard-wired; mapping between our data and the ERP's is data, not code.
 
 ### Stage 0. Checks and client groundwork
 
@@ -75,6 +88,7 @@ Nothing visible changes.
   first administrator).
 - Workstations: creation, one-time registration code.
 - Audit log of sign-ins and administrator actions.
+- System settings: shift boundaries, time format, retention, visibility.
 - CI: server tests on Linux and Windows.
 
 ### Stage 2. The client connects
@@ -114,6 +128,26 @@ Nothing visible changes.
 - Scheduled backups and restore checks.
 - Server installation guide for IT; running as a Windows service.
 - Client notification about a new version.
+- Data retention job.
+
+### Stage 7. Directory
+
+- Supervisor and administrator sign-in with Active Directory accounts
+  (LDAPS); roles from domain groups.
+- Operators may be linked to domain accounts; sign-in at the machine stays
+  name + PIN.
+- Optional browser single sign-on (Kerberos).
+
+### Stage 8. Integration hub
+
+- Connector plugins configured in the admin panel: connection profiles,
+  secrets, test button, routing of event types.
+- Integration outbox: retries, idempotency, dead letters, delivery log.
+- Mapping tables: parts to items, tasks to jobs, operators to employees.
+- Integration API: tokens, event feed by cursor, reference-data upload.
+- Built-in connectors: webhook, file drop, Infor SyteLine (IDO REST),
+  1C (OData). Research first, against a mock ERP until a real one is
+  available.
 
 ---
 
@@ -265,7 +299,7 @@ with sizes and stations.
 
 ### Order of work
 
-Tracking system stages 0–6 first, then the machine-data stages.
+Tracking system stages 0–8 first, then the machine-data stages.
 
 **Stage A.** Material and thickness, sheet consumption, part dimensions in
 the position window. The data is already parsed nearby.

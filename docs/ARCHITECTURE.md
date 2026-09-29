@@ -38,9 +38,125 @@ Status: **planned, not implemented.**
 | Supervisor | Server web page in a browser | Watches production live, exports CSV |
 | Administrator | Server web page | Users, workstations, backups |
 
+Test benches for all of this: [TEST_BENCH.md](TEST_BENCH.md).
+
 Only the operator runs the client: they need the folder with `.nc` files on
 the shop-floor PC, and a browser cannot read it. The supervisor and the
 administrator install nothing.
+
+### Target system
+
+How the whole system is meant to work once all stages are done: abstract
+nodes, the concrete technology on each, and the links between them.
+Dashed links are optional or later stages.
+
+```mermaid
+flowchart LR
+  subgraph FLOOR["Shop floor"]
+    CAM["CAM system<br/>NCeXpress FMS"]
+    SHARE[("File share<br/>.nc .fms .pdf")]
+    MACHINE["Punching machine<br/>control"]
+    subgraph WS["Operator workstation<br/>Windows 7+"]
+      CLIENT["Client .exe<br/>Python 3.8 · Tk<br/>core/ parser"]
+      LOCAL[("Outbox + cache<br/>DPAPI")]
+    end
+  end
+
+  subgraph SRV["Server · Linux Docker or Windows service"]
+    HTTP["Uvicorn · TLS<br/>pinned self-signed cert"]
+    API["REST API /api/v1<br/>FastAPI"]
+    SSE["Event stream<br/>SSE"]
+    WEB["Web pages<br/>supervisor · admin"]
+    SVC["Services<br/>auth · roles · production<br/>sessions · settings"]
+    DB[("Database<br/>SQLite WAL<br/>SQLAlchemy · Alembic")]
+    AUTHP["Auth providers<br/>local · LDAP"]
+    subgraph HUB["Integration hub"]
+      REG["Connectors<br/>plugins + settings"]
+      MAP["Mapping<br/>parts to items · tasks to jobs<br/>operators to employees"]
+      OUT["Integration outbox<br/>retries · dead letter · log"]
+      IAPI["Integration API<br/>tokens · event feed"]
+    end
+    BACKUP["Backup job"]
+  end
+
+  subgraph OFFICE["Office"]
+    SUP["Supervisor<br/>browser"]
+    ADM["Administrator<br/>browser"]
+  end
+
+  subgraph ENT["Enterprise systems"]
+    AD["Active Directory"]
+    ERP["Infor SyteLine"]
+    ONEC["1C:Enterprise"]
+    OTHER["Other ERP / MES<br/>webhook · files"]
+    BSTORE[("Backup storage")]
+  end
+
+  CAM -- "writes programs" --> SHARE
+  SHARE -- "programs" --> MACHINE
+  CLIENT -- "SMB read-only" --> SHARE
+  CLIENT --- LOCAL
+  CLIENT -- "HTTPS: sign-in, events" --> HTTP
+  HTTP -- "SSE: live marks" --> CLIENT
+  MACHINE -. "queue, logs · stage F" .-> CLIENT
+
+  HTTP --> API
+  HTTP --> SSE
+  HTTP --> WEB
+  API --> SVC
+  WEB --> SVC
+  SVC --> SSE
+  SVC --> DB
+  SVC --> AUTHP
+  SVC --> OUT
+  REG --> OUT
+  MAP --> OUT
+  IAPI --> SVC
+  BACKUP --> DB
+
+  SUP -- "HTTPS" --> HTTP
+  ADM -- "HTTPS" --> HTTP
+
+  AUTHP -. "LDAPS · stage 7" .-> AD
+  OUT -. "IDO REST / ION · stage 8" .-> ERP
+  OUT -. "OData · stage 8" .-> ONEC
+  OUT -. "webhook, CSV/XML" .-> OTHER
+  ONEC -. "pulls event feed" .-> IAPI
+  BACKUP --> BSTORE
+```
+
+### One mark, end to end
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor OP as Operator
+  participant CL as Client
+  participant OB as Client outbox
+  participant API as Server API
+  participant DB as Database
+  participant SSE as Event stream
+  participant SUP as Supervisor page
+  participant INT as Integration worker
+  participant ERP as ERP
+
+  OP->>CL: ticks program PRG_07
+  CL->>OB: store event (UUID, task, program, pieces)
+  CL-->>OP: mark shown at once
+  OB->>API: POST /api/v1/events (batch)
+  API->>DB: insert if UUID is new, set operator, workstation, received_at
+  API-->>OB: accepted — remove from outbox
+  API->>SSE: publish event
+  SSE-->>CL: other workstations update the task
+  SSE-->>SUP: totals update live
+  API->>INT: queue for integration
+  INT->>ERP: job transaction per job operation (idempotency key)
+  ERP-->>INT: ok, or retry later
+```
+
+If the server is unreachable, steps 4–11 wait in the client outbox; if the
+ERP is unreachable, steps 12–13 wait in the integration outbox. Neither
+stops the operator.
 
 ---
 
@@ -141,7 +257,9 @@ the shop floor. Caching belongs on the client, for working offline (below).
 | `tasks` | Shift tasks: content-based ID, program names |
 | `events` | Production log: marks and unmarks |
 | `bookmarks` | Users' saved sessions |
+| `settings` | Administrator settings: shifts, time format, retention, visibility |
 | `audit` | Sign-ins, failed attempts, administrator actions |
+| `connections`, `mappings`, `integration_outbox`, `api_tokens` | Integration hub (stage 8) |
 
 Where the database and backups live is set by the administrator in the
 server configuration (a Docker volume or a folder on the server's disk).
@@ -265,6 +383,24 @@ seconds to answer.
 
 ---
 
+## Integrations
+
+Two kinds, both on the server and both configured by the administrator:
+
+- **Directory (stage 7).** An authentication provider interface with `local`
+  and `ldap` implementations: supervisors and administrators sign in with
+  Active Directory accounts, roles follow domain groups. Operators keep
+  name + PIN at the machine.
+- **Integration hub (stage 8).** ERP and other systems are connected through
+  connector plugins configured in the admin panel: connection profiles,
+  encrypted secrets, routing of event types, mapping tables, an integration
+  outbox with retries and a delivery log, and an Integration API for systems
+  that prefer to read from us (typical for 1C).
+
+Details and research: [INTEGRATIONS.md](INTEGRATIONS.md).
+
+---
+
 ## Client–server contract
 
 - **The API is versioned**: `/api/v1/...`. Shop-floor clients are not updated
@@ -297,10 +433,14 @@ server/                   server — separate package with its own dependencies
     api/                  API routes
     web/                  supervisor and admin pages
     db/                   schema, migrations
-    services/             sign-in, roles, production, sessions, export
+    services/             sign-in, roles, production, sessions, settings, export
+    auth/                 authentication providers: local, ldap
+    integrations/         hub: registry, outbox, mapping, integration API
+      connectors/         built-in: webhook, filedrop, syteline, onec
   tests/
   Dockerfile
   docker-compose.yml
+bench/                    test bench: containers and Windows VM checklists
 docs/
 ```
 
