@@ -1,331 +1,321 @@
-# Архитектура: от утилиты к системе учёта
+# Architecture: client and server
 
-Утилита выросла из одной задачи — показать оператору, какие позиции
-сменного задания закрыты. Следующий шаг превращает её в многопользовательскую
-систему: вход по ролям, журнал выработки, сессии, просмотр для мастера.
-Этот документ фиксирует решения, на которых всё это строится, и причины,
-по которым выбраны именно они.
+**English** · [Русский](ARCHITECTURE.ru.md)
 
-Порядок внедрения — в [ROADMAP.md](ROADMAP.md).
+The utility grew out of one job: show the operator which positions of a
+shift task are complete. The next step turns it into a production tracking
+system — role-based sign-in, a production log, saved sessions, a live view
+for the shift supervisor. All of that is built around a **server**, and the
+utility becomes the **client** at the operator's workstation.
 
----
+This document records the decisions and the reasons behind them. The order
+of work is in [ROADMAP.md](ROADMAP.md), the task breakdown in
+[TASKS.md](TASKS.md).
 
-## Что остаётся неизменным
-
-- **Целевая среда.** Windows 7 32-bit, Python 3.8.10, один `.exe` через
-  PyInstaller, без интернета.
-- **Без внешних зависимостей в рантайме.** Всё, что нужно, берётся из
-  стандартной библиотеки или из самой Windows.
-- **Файлы программ только читаются.** В `.nc`, `.fms` и карты наладки
-  утилита не пишет, к стойке станка не обращается.
-- **Ядро (`core/`) не знает ни про окно, ни про хранилище.** Разбор и свод
-  смены остаются чистыми функциями и проверяются тестами без окружения.
-
-## Что меняется в принципах
-
-Утилита начинает **вести историю**. Раньше она читала папку и ничего не
-записывала, и часть решений в ROADMAP опиралась на это («утилита истории не
-ведёт и не должна»). Теперь запись есть, но строго ограничена: только в
-папку данных, которую задал администратор, и только в зашифрованном виде.
-
-Надпись «только чтение» в окне и README меняется на этапе 1: «файлы программ
-не изменяются, станок не затрагивается; учёт ведётся в папке данных».
+Status: **planned, not implemented.**
 
 ---
 
-## Роли
-
-| Возможность | Оператор | Мастер | Администратор |
-|---|:-:|:-:|:-:|
-| Открыть сменное задание, отмечать программы | ✓ | | |
-| Сохранять и открывать сессии | ✓ | | |
-| Выработка пишется от его имени | ✓ | | |
-| Смотреть выработку всех операторов | | ✓ | ✓ |
-| Выгружать выработку в CSV | | ✓ | ✓ |
-| Задать папку данных, настроить рабочее место | | | ✓ |
-| Заводить, блокировать пользователей, сбрасывать PIN | | | ✓ |
-
-Права описаны одной таблицей в коде (`services/roles.py`), экраны и сервисы
-спрашивают её, а не проверяют роль каждый по-своему.
-
-**Оговорка.** Оператор и мастер расшифровывают данные одним ключом данных
-(см. ниже). Разграничение «мастер не пишет выработку, оператор не видит
-чужую» обеспечивает программа, а не криптография. Для цеха этого
-достаточно; криптографическое разделение ролей — возможное расширение.
-
----
-
-## Хранилище
-
-### Почему не SQLite на сетевом диске
-
-Предполагается, что данные лежат на сетевом диске и пишут в них несколько
-рабочих мест. SQLite в своей документации прямо предупреждает: блокировки
-файлов на сетевых файловых системах ненадёжны, и одновременная запись с
-разных машин приводит к порче базы. Второй довод — в стандартной библиотеке
-нет SQLite с шифрованием.
-
-### Журнал событий
-
-Вместо общей базы — журнал из неизменяемых файлов:
-
-- **Одно событие — один файл.** Файл пишется под временным именем и
-  переименовывается, когда записан целиком. Наполовину записанных файлов
-  читатели не видят.
-- **Каждое рабочее место пишет только в свою подпапку.** Два компьютера
-  никогда не пишут в один файл, поэтому конфликтов записи нет в принципе.
-- **Файлы только добавляются.** Исправление — это новое событие, которое
-  отменяет прежнее, а не правка старого файла.
-- **У события есть идентификатор** (случайный UUID). Часы на машинах могут
-  расходиться, поэтому ни дедупликация, ни порядок не опираются только на
-  время.
-
-### Локальный индекс
-
-Читать сотни файлов с сетевого диска при каждом открытии медленно. У каждого
-компьютера есть локальный индекс — обычная SQLite, но на **своём** диске
-(`%LOCALAPPDATA%`), а не на сетевом. Индекс дочитывает только новые файлы
-журнала и хранит уже расшифрованные итоги. Потерять индекс не страшно: он
-пересобирается из журнала.
-
-### Очередь на отправку
-
-Если сетевой диск недоступен, события пишутся в локальную очередь
-(`%LOCALAPPDATA%\FinnPowerCounter\outbox`) и дописываются в журнал, когда
-связь вернётся. Оператор при обрыве сети не теряет отметок; в окне виден
-значок «нет связи с папкой данных, N событий ждут отправки».
-
-### Раскладка папки данных
+## Overview
 
 ```
-<папка данных>/
-  FORMAT                  версия формата хранилища, открытым текстом
-  keys.json               ключевые слоты пользователей (см. «Шифрование»)
-  users.enc               список пользователей и ролей
-  journal/
-    <рабочее место>/
-      2026-09/
-        20260929T142305Z-<uuid>.evt
-  sessions/
-    <uuid пользователя>/
-      2026-09-29_14-30-05-<uuid>.session
+ Shop-floor PC (Windows 7)                Server (Linux / Docker, or Windows)
+┌─────────────────────────────┐         ┌───────────────────────────────────┐
+│ Operator client (.exe)      │  HTTPS  │ API                               │
+│  core/ — .nc/.fms parsing   │ ──────► │  sign-in, roles, production, sess.│
+│  marks, PIN sign-in         │ ◄────── │ Event stream (SSE)                │
+│  outbox                     │   SSE   │ Database                          │
+│  local cache (DPAPI)        │         │ Supervisor and admin web pages    │
+└─────────────────────────────┘         └───────────────────────────────────┘
+                                                        ▲
+                                  Supervisor's and ─────┘  HTTPS
+                                  admin's browser
 ```
 
-Имена файлов не содержат ничего, что стоило бы шифровать: только время и
-случайные идентификаторы. Имя сессии, которое вводит пользователь, имя
-оператора и содержимое лежат внутри зашифрованного файла.
+| Who | Uses | Does |
+|---|---|---|
+| Operator | Client on the shop-floor PC | Opens a shift task, marks programs, saves sessions |
+| Supervisor | Server web page in a browser | Watches production live, exports CSV |
+| Administrator | Server web page | Users, workstations, backups |
 
-### Локальная настройка рабочего места
-
-Путь к папке данных нужен до входа, поэтому он хранится на самом компьютере:
-`%PROGRAMDATA%\FinnPowerCounter\workstation.ini` — путь к папке данных, имя
-рабочего места и секрет рабочего места (см. ниже). Пишет его только мастер
-первичной настройки под администратором.
+Only the operator runs the client: they need the folder with `.nc` files on
+the shop-floor PC, and a browser cannot read it. The supervisor and the
+administrator install nothing.
 
 ---
 
-## Шифрование
+## Why a server rather than a shared network folder
 
-### Цели
+The first draft of this plan kept the data on a shared network drive with
+no server: a log of encrypted files, keys in a file, folder polling. It
+would work, but nearly all of its complexity comes from having no central
+node:
 
-Посторонний с доступом к сетевой папке не должен:
+| Concern | Shared folder | Server |
+|---|---|---|
+| Concurrent writes from several PCs | A log of files — SQLite on a network drive gets corrupted | A real database with transactions |
+| Seeing other clients' changes | Poll the folder every few seconds | The server pushes events immediately |
+| Encryption | Hand-rolled on Windows CNG via ctypes — the main Win7 risk | TLS from the standard library |
+| Brute-forcing a PIN from a copied key file | Mitigated by a workstation secret | Nothing to brute-force: the server checks the PIN and limits attempts |
+| Role permissions | Enforced by the client only | Enforced by the server |
+| Recording production under someone else's name | Not prevented | The server sets the author from the sign-in session |
+| Clock drift between PCs | Event IDs; timestamps unreliable | The server sets the time |
 
-1. **прочитать** данные — кто, когда, что и сколько сделал;
-2. **незаметно изменить** выработку — подделать или исправить событие.
+The cost: a machine for the server and someone to look after it, two
+programs instead of one, and a contract between them (the API). For a shop
+with several workstations and a supervisor who wants live data it is worth
+it.
 
-Защита от подделки «своими» (оператор пишет выработку от чужого имени) в
-цели не входит: для неё нужна личная подпись каждого события. Это возможное
-расширение, архитектура его не исключает.
-
-### Шифр
-
-Стандартная библиотека Python шифров не содержит. Библиотека `cryptography`
-в современных версиях собирается на Rust, а Rust больше не поддерживает
-Windows 7; старые версии без Rust давно не обновляются, и тащить их ради
-шифрования плохо.
-
-Решение: **AES-256-GCM средствами самой Windows** (CNG, `bcrypt.dll`) через
-`ctypes`. Это шифрование ОС: без зависимостей, обновляется вместе с
-системой, есть в Windows 7. GCM одновременно шифрует и проверяет
-целостность, то есть закрывает обе цели.
-
-Шифр спрятан за интерфейсом `storage/cipher.py` с двумя реализациями:
-CNG для Windows и тестовая на `cryptography` для Linux и CI (только для
-тестов, в сборку не попадает). Тесты проверяют, что обе дают одинаковый
-результат на эталонных векторах.
-
-**Проверка на реальной машине — первое, что делается на этапе 0.** Если CNG
-на цеховой Windows 7 32-bit поведёт себя не так, как ожидается, этот раздел
-пересматривается до начала остальной работы.
-
-### Ключи
-
-```
-ключ данных (случайный, 256 бит)
-  ├─ слот администратора:  ключ из пароля администратора (scrypt)
-  ├─ слот восстановления: ключ восстановления (печатается при настройке)
-  ├─ слот оператора А:     ключ из PIN А (scrypt) + секрет рабочего места
-  └─ ...
-```
-
-- Все данные шифруются одним **ключом данных**.
-- Для каждого пользователя ключ данных хранится зашифрованным его личным
-  ключом — это **слот** в `keys.json`. Личный ключ выводится из пароля или
-  PIN медленной функцией (`hashlib.scrypt` или `hashlib.pbkdf2_hmac`).
-- **Вход = успешная расшифровка своего слота.** Отдельной таблицы хешей
-  паролей нет: неверный PIN просто не открывает слот.
-- **Регистрация = администратор добавляет слот.** Для этого нужен ключ
-  данных, поэтому заводить пользователей может только вошедший
-  администратор.
-- **Ключ восстановления** печатается при первичной настройке и хранится
-  у руководства на бумаге. Если потеряны все пароли администраторов и ключ
-  восстановления, данные не восстановить — это цена шифрования, о ней
-  предупреждает мастер настройки.
-
-### PIN и секрет рабочего места
-
-Оператор входит по имени из списка и PIN: у стойки, в перчатках, пароль
-неудобен. Но PIN короткий, и если кто-то скопирует `keys.json`, он может
-перебирать PIN у себя сколько угодно.
-
-Поэтому слот оператора закрыт не только PIN, но и **секретом рабочего
-места** — случайным ключом, который администратор кладёт на каждый цеховой
-компьютер при его настройке и который хранится там под защитой Windows
-(DPAPI, область машины). Копии сетевой папки для перебора недостаточно:
-нужен ещё и сам цеховой компьютер. Внутри программы после нескольких неверных
-PIN вход блокируется на время.
-
-Слоты администратора и восстановления секрета рабочего места не требуют:
-администратор должен иметь возможность войти с любого компьютера, в том
-числе чтобы настроить новый.
+The shared folder stays as a **fallback** if a server turns out to be
+impossible: the client's storage layer sits behind an interface, and the
+second option can be plugged in without touching the window or the core.
 
 ---
 
-## Выработка
+## What stays the same
 
-### Событие
+- **Client: Windows 7 32-bit, Python 3.8.10, a single `.exe`, no external
+  dependencies.** HTTPS and JSON are in the standard library (`http.client`,
+  `ssl`, `json`).
+- **Program files are read-only.** The client never writes to `.nc`, `.fms`
+  or setup sheets and never talks to the machine control.
+- **The core (`core/`) does not change** and knows nothing about windows or
+  networks.
+- **Standalone mode.** Without a configured server the client works as it
+  does today: locally, no sign-in, no tracking. The utility's value must not
+  depend on infrastructure.
 
-Отметка «программа выполнена» записывает событие:
+## What changes
 
-| Поле | Пример |
+- **The client needs the network.** `app.spec` currently excludes `ssl`,
+  `http`, `socket`, `email` and `urllib` — the utility was standalone. They
+  have to come back and the `.exe` grows a little.
+- **History is kept.** The utility used to keep none. Now it does, on the
+  server rather than on the shop-floor PC.
+- The "read-only" notice becomes "program files are never modified, the
+  machine is not touched".
+
+---
+
+## Server
+
+### Platform
+
+The server is not bound by the shop-floor constraints: modern Python,
+ordinary dependencies.
+
+- **Primary platform: Linux in Docker.** One command brings the server up
+  on a test VM and on the shop floor. The reference deployment is
+  `docker compose`.
+- **Windows is supported too.** The code uses nothing Linux-only, and CI
+  runs the server tests on Windows as well. Running as a Windows service is
+  documented when it is needed.
+
+### Technology
+
+| What | Choice | Why |
+|---|---|---|
+| Web framework | FastAPI + Uvicorn | Async, generates the API description |
+| Database | SQLite in WAL mode on the server's local disk | Tens of events per shift; plenty of headroom, backup is a file copy |
+| Data access | SQLAlchemy Core + Alembic | Schema migrations; moving to PostgreSQL is a connection-string change |
+| Password and PIN hashes | `hashlib.scrypt` | Standard library, slow by design |
+| Web pages | Jinja2 templates + a little JavaScript | No heavy front end: tables, filters, CSV |
+| Live updates | Server-Sent Events | Plain HTTP: `EventSource` in the browser, `http.client` in the client |
+
+**Why SSE, not WebSocket.** The stream goes one way — from the server to the
+clients; the client sends marks as ordinary requests. SSE is an ordinary HTTP
+response that never ends: both a browser and a Python 3.8 client can read it
+without third-party libraries. WebSocket is not in the standard library.
+
+**Caching.** A separate server-side cache (Redis and the like) is not needed:
+the volumes are small and the database answers faster than the network to
+the shop floor. Caching belongs on the client, for working offline (below).
+
+### Data
+
+| Table | Holds |
 |---|---|
-| `id` | UUID |
-| `type` | `program_done` / `program_undone` |
-| `task` | идентификатор задания (см. ниже) |
-| `position`, `program` | 7, `PRG_07` |
-| `sheets` | 5 |
-| `pieces` | `{"555001_zz2": 20, ...}` |
-| `operator` | UUID пользователя |
-| `workstation` | имя рабочего места |
-| `at` | время по часам рабочего места, UTC |
+| `users` | Name, role, PIN or password hash, blocked flag |
+| `workstations` | Registered shop-floor PCs and their keys |
+| `auth_sessions` | Sign-in sessions: who, from which workstation, until when |
+| `tasks` | Shift tasks: content-based ID, program names |
+| `events` | Production log: marks and unmarks |
+| `bookmarks` | Users' saved sessions |
+| `audit` | Sign-ins, failed attempts, administrator actions |
 
-Снятая отметка — событие `program_undone`, а не удаление прежнего. Итог по
-заданию: для каждой программы действует последнее событие по ней.
+Where the database and backups live is set by the administrator in the
+server configuration (a Docker volume or a folder on the server's disk).
 
-### Идентификатор задания
+### Encryption
 
-Одно и то же задание может открываться с разных компьютеров и по разным
-путям. Поэтому идентификатор — не путь, а хеш набора программ: имена `.nc`
-и их содержимое. Одинаковые файлы на двух машинах дают один идентификатор,
-и отметки сходятся.
-
-### Итоги
-
-Итоги считаются из событий, а не хранятся отдельно: по оператору, дню,
-смене, заданию; листы, программы, позиции, штуки. Так итог всегда
-пересчитываем и проверяем, а исправление ошибки — это новое событие, а не
-правка цифр.
-
-### Восстановление отметок
-
-Из журнала само собой восстанавливается состояние задания на любом
-компьютере: сменщик открывает ту же папку и видит отметки предыдущей смены.
-Это закрывает исходную проблему пересменки.
+- **In transit — TLS.** The server speaks HTTPS only.
+- **At rest — by the OS**: disk or volume encryption on the server (LUKS,
+  BitLocker). Encrypting individual database fields buys little: the server
+  has to decrypt them anyway, and key management gets harder.
+- **Certificate.** Shop networks rarely have their own certificate
+  authority, so the server generates a self-signed certificate and the
+  client pins its fingerprint when the workstation is registered, trusting
+  nothing else afterwards. The server cannot be impersonated on the network.
 
 ---
 
-## Сессии
+## Sign-in and workstations
 
-Журнал — единственный источник правды об отметках. Сессия — **именованная
-закладка**, а не отдельная копия состояния:
+- **Workstation registration.** The administrator creates a workstation in
+  the web panel and gets a one-time code. The code is entered in the client
+  once; the client receives a workstation key and the certificate
+  fingerprint and stores them protected by Windows (DPAPI).
+- **Operator sign-in: name from a list plus PIN.** The server accepts a PIN
+  only from a registered workstation and locks sign-in after several wrong
+  attempts. A stolen PIN is useless without a shop-floor PC.
+- **Supervisor and administrator sign-in**: user name and password in the
+  browser.
+- **Roles are enforced by the server.** The client only hides what is not
+  available; permission comes from the server.
 
-- пользователь вводит имя при сохранении, к нему добавляются дата и время
-  сохранения;
-- сессия хранит: имя, автора, время, идентификатор и путь задания, набор
-  отметок на момент сохранения;
-- открыть сессию — открыть её задание с текущими отметками из журнала;
-  отметки на момент сохранения показываются для сравнения («с момента
-  сохранения отмечено ещё 3 программы»).
+### Offline sign-in
 
-Два источника правды не возникают: сессия ничего не отменяет и не
-перезаписывает.
-
----
-
-## Асинхронность
-
-Tk можно трогать только из главного потока, а сетевой диск может отвечать
-секундами. Поэтому:
-
-- **Весь ввод-вывод — в фоновом потоке** (`ui/worker.py`): чтение и запись
-  журнала, сессий, индекса. Окно ставит задачу в очередь и получает
-  результат через `root.after()`. Окно не зависает никогда.
-- **Автоподгрузка без нажатий.** Фоновый поток раз в несколько секунд
-  проверяет подпапки журнала на новые файлы и дочитывает только их.
-  Уведомления файловой системы по SMB ненадёжны, поэтому опрос.
-- **Состояние связи видно.** Нет связи с папкой — значок и число событий в
-  очереди на отправку; связь вернулась — очередь дописывается сама.
+If the server is unreachable at start-up, an operator can sign in if they
+have signed in on this PC before: the client keeps a PIN verifier from the
+last successful sign-in, protected by DPAPI. Marks made this way are flagged
+"offline sign-in" and accepted by the server once the connection is back,
+on the strength of the workstation key.
 
 ---
 
-## Структура кода
+## Production
+
+### Event
+
+Marking a program as done is an event:
+
+| Field | Set by | Example |
+|---|---|---|
+| `id` | client | UUID — safe resending without duplicates |
+| `type` | client | `program_done` / `program_undone` |
+| `task` | client | task ID (below) |
+| `position`, `program` | client | 7, `PRG_07` |
+| `sheets`, `pieces` | client | 5, `{"555001_zz2": 20}` |
+| `occurred_at` | client | when the button was pressed, by the PC clock |
+| `operator`, `workstation` | **server** | from the sign-in session |
+| `received_at` | **server** | by the server clock |
+
+The server sets the author and the receive time: a client cannot record
+production under someone else's name. Resending an event with the same `id`
+changes nothing.
+
+Unmarking is a `program_undone` event, not a deletion. For each program of a
+task the last event in the server's receive order wins.
+
+### Task ID
+
+The same task is opened from different PCs via different paths. So the ID is
+a hash of the program set — `.nc` names and contents. The client does the
+parsing with the same `core/`; the server receives ready sheet and piece
+counts.
+
+### Totals and recovery
+
+- Totals are computed from events: per operator, day, shift, task; sheets,
+  programs, positions, pieces. A correction is a new event, not an edit.
+- The next shift opens the same task and sees the previous shift's marks —
+  from any workstation. That closes the original shift-handover problem.
+- The supervisor sees each mark immediately: the server broadcasts the event
+  to every subscribed client and page.
+
+---
+
+## Sessions
+
+The log is the single source of truth about marks. A session is a **named
+bookmark** on the server:
+
+- the user types a name; the save date and time are added to it;
+- the session stores its author, the task (ID and path) and the marks at the
+  moment of saving;
+- opening a session opens its task with the current marks; the marks at
+  save time are shown for comparison.
+
+---
+
+## Client
+
+### Asynchrony
+
+Tk may only be touched from the main thread, and the network may take
+seconds to answer.
+
+- **All server traffic runs on a background thread** (`client/worker.py`).
+  The window queues a job and gets the result through `root.after()`. The
+  window never freezes.
+- **The event stream** has its own background thread: it reads SSE and hands
+  changes to the window. On a drop it reconnects with a back-off.
+- **Connection state is visible** in the window: "connected",
+  "offline, N marks waiting to be sent".
+
+### Working offline
+
+- Marks go to a **local outbox** and are sent when the connection returns.
+  Resending is safe thanks to the event `id`.
+- A **local cache** holds the last known task state and the operator list for
+  sign-in. The outbox and the cache are encrypted with DPAPI: copied off the
+  shop-floor PC, they cannot be read elsewhere.
+- If two operators mark the same thing while offline, the server's receive
+  order wins and the supervisor sees such marks flagged.
+
+---
+
+## Client–server contract
+
+- **The API is versioned**: `/api/v1/...`. Shop-floor clients are not updated
+  all at once, so the server keeps the previous API version while it is in
+  use.
+- On connect the client reports its version and the server its minimum
+  supported one. A client that is too old gets a clear "please update"
+  message, not an obscure error.
+- The server generates the API description (OpenAPI), and it is kept in the
+  repository so that changes show up in pull requests.
+
+---
+
+## Repository layout
 
 ```
-finnpower_counter/
-  core/        разбор .nc/.fms и свод смены — без изменений
-  storage/
-    cipher.py      AES-GCM: CNG для Windows, тестовая для Linux
-    keys.py        ключ данных, слоты, секрет рабочего места
-    journal.py     атомарная запись событий, чтение новых
-    index.py       локальный индекс на SQLite
-    outbox.py      очередь на отправку
-  services/
-    roles.py       таблица прав
-    auth.py        вход, регистрация, блокировка
-    production.py  события выработки и итоги
-    sessions.py    сессии-закладки
-    export.py      выгрузка в CSV
-  ui/
-    worker.py      фоновый исполнитель
-    login.py       окно входа
-    operator.py    окно оператора (нынешний gui.py)
-    master.py      окно мастера
-    admin.py       панель администратора, мастер первичной настройки
-  config.py    настройка рабочего места
-  cli.py       инструмент разработчика, как сейчас
+finnpower_counter/        client
+  core/                   .nc/.fms parsing and shift summary — unchanged
+  client/
+    api.py                server requests (http.client + ssl)
+    events.py             SSE stream reader
+    outbox.py             outgoing queue
+    cache.py              local cache
+    dpapi.py              local file protection via Windows
+    worker.py             background executor
+  ui/                     windows: sign-in, operator (today's gui.py), setup
+  cli.py                  developer tool
+server/                   server — separate package with its own dependencies
+  fpc_server/
+    api/                  API routes
+    web/                  supervisor and admin pages
+    db/                   schema, migrations
+    services/             sign-in, roles, production, sessions, export
+  tests/
+  Dockerfile
+  docker-compose.yml
+docs/
 ```
 
-Зависимости идут в одну сторону: `ui` → `services` → `storage`, `core`.
-Сервисы не знают про окно, хранилище не знает про роли.
+Client and server live in one repository: the contract between them changes
+in a single pull request, and the tests check both sides at once.
 
 ---
 
-## Версия формата
+## Risks
 
-В корне папки данных лежит `FORMAT` с номером версии. Утилита старой версии,
-увидев более новый формат, отказывается писать и сообщает, что нужно
-обновиться. Миграции формата — отдельные шаги с резервной копией перед
-запуском.
-
----
-
-## Риски
-
-| Риск | Что с ним делать |
+| Risk | Mitigation |
 |---|---|
-| CNG на Windows 7 32-bit ведёт себя не так | Проверка на реальной машине до начала работ, этап 0 |
-| Сетевой диск в цеху медленный или рвётся | Фоновый поток, очередь на отправку, значок связи |
-| Разные часы на машинах | Идентификаторы событий; время только для показа и группировки |
-| Потеряны все пароли и ключ восстановления | Предупреждение в мастере настройки, бумажный ключ, резервные копии |
-| Копия `keys.json` для перебора PIN | Секрет рабочего места, медленная функция вывода ключа |
-| Два окна утилиты на одной машине | Блокировка на уровне рабочего места, второе окно только читает |
+| Python 3.8 on Windows 7 cannot negotiate TLS with the server | Check on a real machine first, stage 0 |
+| DPAPI via ctypes misbehaves on Win7 | Same check, stage 0 |
+| The server is unreachable | Offline work, outbox, standalone mode |
+| Losing the server database | Scheduled backups, restore drills |
+| Mixed client versions on the floor | API versioning, minimum client version |
+| Nobody to look after the server | One-command Docker deployment, instructions for IT |
