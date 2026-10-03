@@ -258,37 +258,17 @@ locally; the path is given by `FINNPOWER_DATASET`.
 
 ## Roadmap
 
-The utility is growing from a single-workstation tool into a small production
-tracking system: a server with a database, the utility as the operator's
-client, and a web page for the shift supervisor. Nothing below is implemented
-yet.
+**This utility stays standalone** — read-only, no network, no history, one
+`.exe`. Planned work is about reading more from the machine files: material
+and thickness, sheet consumption, time to the end of the task, part weight,
+order and customer. Details in [docs/ROADMAP.md](docs/ROADMAP.md), tasks in
+[docs/TASKS.md](docs/TASKS.md), the code audit in
+[docs/FINDINGS.md](docs/FINDINGS.md).
 
-| Stage | What it brings |
-|---|---|
-| 0 | Windows 7 compatibility checks, client groundwork — no visible change |
-| 1 | Server: users and roles, workstations, admin web panel, Docker deployment |
-| 2 | Client connects: workstation registration, operator sign-in with name and PIN, offline sign-in |
-| 3 | Production log: every mark recorded on the server, outbox when offline, live updates across workstations |
-| 4 | Supervisor web page: production per operator, day, shift and task; CSV export |
-| 5 | Saved sessions: named bookmarks with date and time |
-| 6 | Operations: backups, installation guide, update notices, data retention |
-| 7 | Directory: sign-in with Active Directory accounts, roles from groups |
-| 8 | Integration hub: pluggable ERP connectors configured by the administrator — Infor SyteLine, 1C, webhook, files — and an API for ERPs to read from |
-| A–F | More data from the machine files: material, time, weight, order, automatic detection of executed programs |
-
-Standalone mode stays: without a server the utility works exactly as it does
-now, and program files remain read-only. The project is open source and not
-tied to a particular shop: shifts, operators, retention, directory and ERP
-are configured by the administrator.
-
-Details:
-
-- [docs/ROADMAP.md](docs/ROADMAP.md) — stages and decisions
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — client–server design and why
-- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — ERP and Active Directory research, integration hub design
-- [docs/TEST_BENCH.md](docs/TEST_BENCH.md) — test bench nodes, configurations and scenarios
-- [docs/TASKS.md](docs/TASKS.md) — task breakdown with acceptance criteria
-- [docs/FINDINGS.md](docs/FINDINGS.md) — audit results and planning findings
+**Growing into a production tracking system** — a server, operator sign-in,
+a live supervisor page, Active Directory and ERP integration — happens in a
+separate project, **[Nestrack](https://github.com/malinkin-s/nestrack)**. It grew out of this utility and
+reuses its parser, so parser improvements made here reach it too.
 
 The repository is maintained in English; Russian versions (`*.ru.md`) are
 translations and may lag behind.
