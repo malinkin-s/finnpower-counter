@@ -36,3 +36,17 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      # The package must install and work without the source tree next to
+      # it: that is how Nestrack uses it.
+      - name: Build and install the package
+        shell: bash
+        run: |
+          python -m pip install build
+          python -m build --wheel --outdir dist
+          python -m venv .pkgtest
+          if [ -x .pkgtest/Scripts/python ]; then PY=.pkgtest/Scripts/python; else PY=.pkgtest/bin/python; fi
+          $PY -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/$PY" -c "import finnpower_counter.core.balance, finnpower_counter.presentation; print('ok')"
+          "$GITHUB_WORKSPACE/$PY" -m finnpower_counter --dir "$GITHUB_WORKSPACE/tests/fixtures/shift_ok" --done 5 --lang en

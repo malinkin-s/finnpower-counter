@@ -39,6 +39,7 @@ Fixed in [#2](https://github.com/malinkin-s/finnpower-counter/pull/2).
 | FND-16 | — | `ProgramNest.number` and `reader.program_number` are computed but no logic or view uses them any more | `core/model.py`, `core/reader.py` | M-09 |
 | FND-17 | — | The GUI has no tests; `gui.py` changes are only checked by compiling | `gui.py` | U-03 |
 | FND-18 | — | The `Claude Code Review` job finished in under a minute on #2 without a single comment. It may have found nothing, or it may not run properly (e.g. the `CLAUDE_CODE_OAUTH_TOKEN` secret). Needs a look at the job log | `.github/workflows/claude-code-review.yml` | M-10 |
+| FND-19 | Low | Piping the CLI output into a command that closes early (`… \| head`) raises `BrokenPipeError`, which is treated as a crash and writes an error report. Found while testing the package | `cli.py` `run` | M-12 |
 
 ---
 
