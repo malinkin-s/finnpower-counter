@@ -81,7 +81,7 @@ tag documented in the README.
 works on Python 3.8 and a current Python; `finnpower_counter.core` imports
 without Tk.
 
-### P-02 Keep the core free of GUI and network imports · S
+### P-02 Keep the core free of GUI and network imports · S · done
 
 **Scope.** A CI check that `finnpower_counter.core` and
 `finnpower_counter.presentation` import nothing from `tkinter`, `socket`,
@@ -108,6 +108,7 @@ Small, independent; can be done at any time.
 | M-09 | S | Decide on `ProgramNest.number`: remove it or give it a use | FND-16 |
 | M-10 | S | Check the `Claude Code Review` job log and its secret | FND-18 |
 | M-11 | L | Translate code comments and docstrings to English, module by module, alongside other changes | English-first repository |
+| M-12 | S | Exit quietly on `BrokenPipeError` in the CLI instead of writing a crash report | FND-19 |
 
 ---
 

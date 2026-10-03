@@ -43,3 +43,7 @@ venv/
 .env
 .idea/
 .vscode/
+
+# --- Package build ---
+*.egg-info/
+.pkgtest/

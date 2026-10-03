@@ -157,6 +157,18 @@ python -m finnpower_counter --dir ПАПКА --done 15 --validate
 Ключи: `--dir`, `--done`, `--mode {parts,programs}`, `--only {all,done,work}`,
 `--search`, `--sort`, `--desc`, `--validate`, `--json`, `--lang {en,ru}`.
 
+### Пакетом
+
+Утилита ставится через pip; разбор и вспомогательные функции показа
+импортируются без окна, поэтому на них могут опираться другие проекты:
+
+```bash
+pip install "git+https://github.com/malinkin-s/finnpower-counter@v0.2.0"
+finnpower-counter --dir ПАПКА --done 15
+```
+
+Выпуски помечаются тегами `vX.Y.Z` и перечислены в [CHANGELOG.md](CHANGELOG.md).
+
 ### Язык
 
 Русский и английский. Определяется из системы, переключается в окне или

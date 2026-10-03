@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finnpower-counter"
+dynamic = ["version"]
+description = "Shop-floor utility that tracks which positions of a CNC punching shift task are complete"
+readme = "README.md"
+requires-python = ">=3.8"
+# The table form, not an SPDX string: the string needs setuptools >= 77,
+# which no longer runs on Python 3.8.
+license = { text = "MIT" }
+authors = [{ name = "malinkin-s" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+]
+# No runtime dependencies: the standard library only, as on the shop-floor PC.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/malinkin-s/finnpower-counter"
+Changelog = "https://github.com/malinkin-s/finnpower-counter/blob/main/CHANGELOG.md"
+
+[project.scripts]
+finnpower-counter = "finnpower_counter.cli:run"
+
+[project.gui-scripts]
+finnpower-counter-gui = "finnpower_counter.gui:main"
+
+[tool.setuptools]
+packages = ["finnpower_counter", "finnpower_counter.core"]
+
+[tool.setuptools.dynamic]
+version = { attr = "finnpower_counter.__version__" }

@@ -164,6 +164,18 @@ Options: `--dir`, `--done`, `--mode {parts,programs}`,
 `--only {all,done,work}`, `--search`, `--sort`, `--desc`, `--validate`,
 `--json`, `--report`, `--lang {en,ru}`.
 
+### As a package
+
+The utility installs with pip; the parser and the view helpers import without
+a GUI, so other projects can depend on them:
+
+```bash
+pip install "git+https://github.com/malinkin-s/finnpower-counter@v0.2.0"
+finnpower-counter --dir FOLDER --done 15
+```
+
+Releases are tagged `vX.Y.Z` and listed in [CHANGELOG.md](CHANGELOG.md).
+
 ### Language
 
 Russian and English. Detected from the system, switchable in the window or
